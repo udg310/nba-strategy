@@ -231,7 +231,7 @@ def abbr_of_name(name):
 import ssl, urllib.request
 
 PROXY = os.environ.get("NBA_PROXY", "http://127.0.0.1:9567")
-_CTX = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
+_CTX = ssl.create_default_context()
 _OPENER = urllib.request.build_opener(
     urllib.request.HTTPSHandler(context=_CTX),
     urllib.request.ProxyHandler({"http": PROXY, "https": PROXY}))

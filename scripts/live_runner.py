@@ -43,6 +43,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nba_data as nd
 import strategy as S
+from executor_lock import account_lock
 
 POLL = 3
 
@@ -885,7 +886,13 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     live = args.live and not args.dry_run
+    if live:
+        with account_lock(load_env()["POLY_FUNDER"]):
+            return run(live=True)
+    return run(live=False)
 
+
+def run(live):
     client = make_client()
     bal = balance(client)
     log({"ev": "start", "live": live, "balance": bal, "stake_frac": STAKE_FRAC,

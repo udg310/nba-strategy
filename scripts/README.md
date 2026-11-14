@@ -1,12 +1,17 @@
 # scripts/ — final framework (2026-11-14)
 
+Start the paper strategy and executor together from the repository root with
+`python scripts/executor.py --scoreboard`. See the [English](../README.md)
+or [Chinese](../README.zh-CN.md) guide for recordings, account setup and the local API.
+
 | File | Purpose |
 |---|---|
 | **`strategy.py`** | **the one strategy.** A/C/D, backtest, live replay. No other strategy file. |
 | **`nba_data.py`** | data / clock / HTTP / compact bundle. **No strategy rules.** |
-| `live_runner.py` | live execution; one `GameTrader` per game (see top docstring). |
+| `executor.py` | start the Python strategy, execution workers and local API in one process. |
+| `live_runner.py` | legacy live execution; one `GameTrader` per game (see top docstring). |
 | `pm_creds.py` | credential helper; credentials stay in `~/.polymarket`. |
-| `run_live.sh` | launcher: checks the proxy; `--live` for real orders. |
+| `run_live.sh` | launcher for the legacy live runner. |
 | `make_bundle.py` | rebuild `data/backtest_bundle.json.gz` from raw sources. |
 | `replay_live.py` | replay the 14 historical + today's 9 live games. |
 | `swing_probe.py` | paper-only book recorder around score changes (maker research). |

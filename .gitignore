@@ -1,4 +1,5 @@
 .DS_Store
+/var/executor/
 __pycache__/
 *.pyc
 # raw backtest sources (rebuild with scripts/make_bundle.py; the bundle is committed)

@@ -1,0 +1,4 @@
+# Signed payload and response contracts used by executor_clob.py.
+py-clob-client-v2==1.2.2
+# AES-GCM for Go-compatible live_prepared records.
+pycryptodome>=3.20,<4

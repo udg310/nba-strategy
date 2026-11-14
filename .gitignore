@@ -1,0 +1,11 @@
+.DS_Store
+__pycache__/
+*.pyc
+# raw backtest sources (rebuild with scripts/make_bundle.py; the bundle is committed)
+data/games.json
+data/diverse_opponents.json
+data/cache/
+# archived engines / data
+data/_archive/
+scripts/_archive/
+data/live_trade/

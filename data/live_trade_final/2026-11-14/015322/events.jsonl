@@ -1,0 +1,9 @@
+{"ev": "start", "live": true, "balance": 30.82367, "stake_frac": 0.05, "min_order": 1.0, "stake_now": {"A": 1.54, "C": 1.54, "D": 3.08}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-14/015322", "t": 1794621203.7209432}
+{"ev": "resolve", "gid": "401909299", "slug": "nba-atl-chi-2026-11-13", "fav": "Hawks", "pre": 0.685, "t": 1794621207.4471161}
+{"ev": "resume_position", "gid": "401909299", "ch": "A", "outcome": "Bulls", "entry": 0.5, "size": 3.326531, "t": 1794621208.0206459}
+{"ev": "resolve", "gid": "401909296", "slug": "nba-nyk-ind-2026-11-13", "fav": "Knicks", "pre": 0.725, "t": 1794621211.3810508}
+{"ev": "resolve", "gid": "401909297", "slug": "nba-mil-orl-2026-11-13", "fav": "Magic", "pre": 0.785, "t": 1794621214.9356549}
+{"ev": "resolve", "gid": "401909298", "slug": "nba-cle-mia-2026-11-13", "fav": "Heat", "pre": 0.565, "t": 1794621218.532392}
+{"ev": "resolve", "gid": "401909300", "slug": "nba-mem-nop-2026-11-13", "fav": "Grizzlies", "pre": 0.605, "t": 1794621221.875444}
+{"ev": "resolve", "gid": "401909301", "slug": "nba-uta-hou-2026-11-13", "fav": "Rockets", "pre": 0.905, "t": 1794621225.349111}
+{"ev": "signal", "gid": "401909298", "ch": "C", "outcome": "Cavaliers", "ask": 0.6, "usd": 1.54, "el": 1156.0, "m": -5, "live": true, "t": 1794621481.8372748}

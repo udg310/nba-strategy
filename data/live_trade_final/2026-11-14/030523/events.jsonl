@@ -1,0 +1,19 @@
+{"ev": "start", "live": true, "balance": 29.985081, "stake_frac": 0.05, "stake_now": {"A": 1.5, "C": 1.5, "D": 3.0}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-14/030523", "t": 1794625524.5728}
+{"ev": "trader_start", "gid": "401909298", "fav": "Heat", "pre": 0.565, "open0": 0, "t": 1794625528.022509}
+{"ev": "trader_start", "gid": "401909299", "fav": "Hawks", "pre": 0.685, "open0": 0, "t": 1794625532.305998}
+{"ev": "resume_position", "gid": "401909300", "ch": "D", "outcome": "Grizzlies", "entry": 0.69, "size": 4.463767, "t": 1794625536.400801}
+{"ev": "trader_start", "gid": "401909300", "fav": "Grizzlies", "pre": 0.605, "open0": 1, "t": 1794625536.401348}
+{"ev": "trader_start", "gid": "401909301", "fav": "Rockets", "pre": 0.905, "open0": 0, "t": 1794625539.967531}
+{"ev": "trader_start", "gid": "401909302", "fav": "Spurs", "pre": 0.845, "open0": 0, "t": 1794625543.551208}
+{"ev": "trader_start", "gid": "401909303", "fav": "Trail Blazers", "pre": 0.805, "open0": 0, "t": 1794625846.598319}
+{"ev": "heartbeat", "balance": 29.99, "open": 1, "traders": 6, "positions": [["401909300", "D", "Grizzlies", 0.69, 4.463767]], "confirmed": {"buy": false, "sell": false}, "t": 1794625866.4488268}
+{"ev": "signal", "gid": "401909301", "ch": "C", "outcome": "Jazz", "ask": 0.27, "usd": 1.5, "el": 2005.0, "m": -2, "t": 1794625953.880213}
+{"ev": "buy", "gid": "401909301", "ch": "C", "outcome": "Jazz", "filled_shares": 5.555556, "entry": 0.27, "usd": 1.5, "tries": 1, "t": 1794625958.282923}
+{"ev": "CONFIRMED_BUY", "gid": "401909301", "ch": "C", "shares": 5.555556, "entry": 0.27, "t": 1794625958.2835999}
+{"ev": "signal", "gid": "401909301", "ch": "A", "outcome": "Jazz", "ask": 0.43, "usd": 1.42, "el": 2065.0, "m": -7, "t": 1794626043.683577}
+{"ev": "buy", "gid": "401909301", "ch": "A", "outcome": "Jazz", "filled_shares": 3.2272729999999994, "entry": 0.44, "usd": 1.42, "tries": 1, "t": 1794626047.472238}
+{"ev": "signal", "gid": "401909303", "ch": "C", "outcome": "Kings", "ask": 0.29, "usd": 1.35, "el": 176.0, "m": -3, "t": 1794626114.168821}
+{"ev": "buy", "gid": "401909303", "ch": "C", "outcome": "Kings", "filled_shares": 4.821429, "entry": 0.28, "usd": 1.35, "tries": 1, "t": 1794626119.2536151}
+{"ev": "heartbeat", "balance": 25.57, "open": 4, "traders": 6, "positions": [["401909300", "D", "Grizzlies", 0.69, 4.463767], ["401909301", "C", "Jazz", 0.27, 5.555556], ["401909301", "A", "Jazz", 0.44, 3.2272729999999994], ["401909303", "C", "Kings", 0.28, 4.821429]], "confirmed": {"buy": true, "sell": false}, "t": 1794626187.4532359}
+{"ev": "exit", "gid": "401909301", "ch": "C", "reason": "target", "bid": 0.51, "entry": 0.27, "size": 5.555556, "t": 1794626210.597949}
+{"ev": "heartbeat", "balance": 29.94, "open": 4, "traders": 6, "positions": [["401909300", "D", "Grizzlies", 0.69, 4.463767], ["401909301", "C", "Jazz", 0.27, 5.555556], ["401909301", "A", "Jazz", 0.44, 3.2272729999999994], ["401909303", "C", "Kings", 0.28, 4.821429]], "confirmed": {"buy": true, "sell": false}, "t": 1794626506.751026}

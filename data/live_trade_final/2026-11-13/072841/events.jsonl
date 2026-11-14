@@ -1,0 +1,3 @@
+{"ev": "start", "live": false, "balance": 18.661539, "stake": {"A": 1.0, "C": 1.0, "D": 2.0}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-13/072841", "t": 1794554921.935457}
+{"ev": "day_over", "games": 4, "t": 1794554922.206922}
+{"ev": "stopped", "open": 0, "balance": 18.661539, "t": 1794554922.857379}

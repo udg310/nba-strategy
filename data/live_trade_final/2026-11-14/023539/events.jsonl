@@ -1,0 +1,5 @@
+{"ev": "start", "live": false, "balance": 30.82367, "stake_frac": 0.05, "min_order": 1.0, "stake_now": {"A": 1.54, "C": 1.54, "D": 3.08}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-14/023539", "t": 1794623740.692235}
+{"ev": "resolve", "gid": "401909299", "slug": "nba-atl-chi-2026-11-13", "fav": "Hawks", "pre": 0.685, "t": 1794623744.751647}
+{"ev": "resume_position", "gid": "401909299", "ch": "A", "outcome": "Bulls", "entry": 0.5, "size": 3.326531, "t": 1794623745.235305}
+{"ev": "resolve", "gid": "401909296", "slug": "nba-nyk-ind-2026-11-13", "fav": "Knicks", "pre": 0.725, "t": 1794623749.5490181}
+{"ev": "resolve", "gid": "401909298", "slug": "nba-cle-mia-2026-11-13", "fav": "Heat", "pre": 0.565, "t": 1794623753.854453}

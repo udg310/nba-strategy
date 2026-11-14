@@ -1,0 +1,138 @@
+{"ev": "start", "live": true, "balance": 32.60921, "stake_frac": 0.05, "min_order": 1.0, "stake_now": {"A": 1.63, "C": 1.63, "D": 3.26}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-14/000334", "t": 1794614614.88735
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794614932.3275561}
+{"ev": "resolve", "gid": "401909297", "slug": "nba-mil-orl-2026-11-13", "fav": "Magic", "pre": 0.785, "t": 1794615068.744676}
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794616009.821263}
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794616020.834921}
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794616031.850091}
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794616042.8652558}
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794616213.388391}
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794616224.397588}
+{"ev": "resolve", "gid": "401909296", "slug": "nba-nyk-ind-2026-11-13", "fav": "Knicks", "pre": 0.725, "t": 1794616239.24368}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794616287.951064}
+{"ev": "espn_err", "err": "<urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)>", "t": 1794616293.959975}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794616617.0278258}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794616938.4697669}
+{"ev": "signal", "gid": "401909296", "ch": "C", "outcome": "Pacers", "ask": 0.32, "usd": 1.63, "el": 807.0, "m": -2, "live": true, "t": 1794617128.6504042}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794617260.002194}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "buy_gave_up", "gid": "401909296", "ch": "C", "reason": "PolyApiException[status_code=400, error_message={'error': 'invalid amounts, the market buy orders ma", "t": 1794617314.711204}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794617580.312051}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794617900.5196748}
+{"ev": "signal", "gid": "401909296", "ch": "A", "outcome": "Pacers", "ask": 0.45, "usd": 1.63, "el": 1051.0, "m": -7, "live": true, "t": 1794617940.0528388}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "buy_gave_up", "gid": "401909296", "ch": "A", "reason": "ask 0.530 > 0.480", "t": 1794618120.103074}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794618222.744467}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794618543.0468621}
+{"ev": "resolve", "gid": "401909300", "slug": "nba-mem-nop-2026-11-13", "fav": "Grizzlies", "pre": 0.605, "t": 1794618651.1833012}
+{"ev": "resolve", "gid": "401909299", "slug": "nba-atl-chi-2026-11-13", "fav": "Hawks", "pre": 0.685, "t": 1794618659.507828}
+{"ev": "resolve", "gid": "401909298", "slug": "nba-cle-mia-2026-11-13", "fav": "Heat", "pre": 0.565, "t": 1794618709.140266}
+{"ev": "signal", "gid": "401909300", "ch": "C", "outcome": "Pelicans", "ask": 0.44, "usd": 1.63, "el": 149.0, "m": -3, "live": true, "t": 1794618867.34439}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794618881.475231}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "signal", "gid": "401909299", "ch": "C", "outcome": "Bulls", "ask": 0.36, "usd": 1.63, "el": 225.0, "m": -2, "live": true, "t": 1794618936.668822}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "signal", "gid": "401909298", "ch": "C", "outcome": "Cavaliers", "ask": 0.46, "usd": 1.63, "el": 208.0, "m": -2, "live": true, "t": 1794618985.7161689}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "buy_gave_up", "gid": "401909300", "ch": "C", "reason": "PolyApiException[status_code=400, error_message={'error': 'invalid amounts, the market buy orders ma", "t": 1794619050.8257122}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "buy_gave_up", "gid": "401909299", "ch": "C", "reason": "ask 0.400 > 0.390", "t": 1794619117.15589}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "buy_gave_up", "gid": "401909298", "ch": "C", "reason": "PolyApiException[status_code=400, error_message={'error': 'invalid amounts, the market buy orders ma", "t": 1794619170.400935}
+{"ev": "heartbeat", "balance": 32.61, "open": 0, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794619203.653291}
+{"ev": "signal", "gid": "401909299", "ch": "A", "outcome": "Bulls", "ask": 0.48, "usd": 1.63, "el": 319.0, "m": -8, "live": true, "t": 1794619217.885398}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"invalid amounts, the market buy orders maker amount supports a max accuracy of 2 decimals, taker amount a max of 4 decimals"}
+{"ev": "buy", "gid": "401909299", "ch": "A", "outcome": "Bulls", "filled_shares": 3.326531, "entry": 0.5, "usd": 1.63, "t": 1794619371.681016}
+{"ev": "CONFIRMED_BUY", "gid": "401909299", "ch": "A", "shares": 3.326531, "entry": 0.5, "note": "first real fill", "t": 1794619371.6816058}
+{"ev": "heartbeat", "balance": 30.94, "open": 1, "positions": [["A", "Bulls", 0.5, 3.326531]], "confirmed": {"buy": true, "sell": false}, "t": 1794619571.364161}
+{"ev": "heartbeat", "balance": 30.94, "open": 1, "positions": [["A", "Bulls", 0.5, 3.326531]], "confirmed": {"buy": true, "sell": false}, "t": 1794619990.783083}
+{"ev": "heartbeat", "balance": 30.94, "open": 1, "positions": [["A", "Bulls", 0.5, 3.326531]], "confirmed": {"buy": true, "sell": false}, "t": 1794620411.842271}
+{"ev": "resolve", "gid": "401909301", "slug": "nba-uta-hou-2026-11-13", "fav": "Rockets", "pre": 0.905, "t": 1794620507.1785338}
+{"ev": "heartbeat", "balance": 30.94, "open": 1, "positions": [["A", "Bulls", 0.5, 3.326531]], "confirmed": {"buy": true, "sell": false}, "t": 1794620832.8873742}

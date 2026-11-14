@@ -1,0 +1,126 @@
+{"ev": "start", "live": true, "balance": 30.82367, "stake_frac": 0.05, "min_order": 1.0, "stake_now": {"A": 1.54, "C": 1.54, "D": 3.08}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-14/015322", "t": 1794621203.72094
+{"ev": "resolve", "gid": "401909299", "slug": "nba-atl-chi-2026-11-13", "fav": "Hawks", "pre": 0.685, "t": 1794621207.4471161}
+{"ev": "resume_position", "gid": "401909299", "ch": "A", "outcome": "Bulls", "entry": 0.5, "size": 3.326531, "t": 1794621208.0206459}
+{"ev": "resolve", "gid": "401909296", "slug": "nba-nyk-ind-2026-11-13", "fav": "Knicks", "pre": 0.725, "t": 1794621211.3810508}
+{"ev": "resolve", "gid": "401909297", "slug": "nba-mil-orl-2026-11-13", "fav": "Magic", "pre": 0.785, "t": 1794621214.9356549}
+{"ev": "resolve", "gid": "401909298", "slug": "nba-cle-mia-2026-11-13", "fav": "Heat", "pre": 0.565, "t": 1794621218.532392}
+{"ev": "resolve", "gid": "401909300", "slug": "nba-mem-nop-2026-11-13", "fav": "Grizzlies", "pre": 0.605, "t": 1794621221.875444}
+{"ev": "resolve", "gid": "401909301", "slug": "nba-uta-hou-2026-11-13", "fav": "Rockets", "pre": 0.905, "t": 1794621225.349111}
+{"ev": "signal", "gid": "401909298", "ch": "C", "outcome": "Cavaliers", "ask": 0.6, "usd": 1.54, "el": 1156.0, "m": -5, "live": true, "t": 1794621481.8372748}
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+Traceback (most recent call last):
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http_proxy.py", line 343, in handle_request
+    return self._connection.handle_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 187, in handle_request
+    raise exc
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 150, in handle_request
+    status, headers = self._receive_response(
+                      ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 294, in _receive_response
+    event = self._receive_stream_event(request, stream_id)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 336, in _receive_stream_event
+    self._receive_events(request, stream_id)
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 364, in _receive_events
+    events = self._read_incoming_data(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 438, in _read_incoming_data
+    raise self._read_exception  # pragma: nocover
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http_proxy.py", line 343, in handle_request
+    return self._connection.handle_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 187, in handle_request
+    raise exc
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 150, in handle_request
+    status, headers = self._receive_response(
+                      ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 294, in _receive_response
+    event = self._receive_stream_event(request, stream_id)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 336, in _receive_stream_event
+    self._receive_events(request, stream_id)
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 364, in _receive_events
+    events = self._read_incoming_data(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 455, in _read_incoming_data
+    raise exc
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 443, in _read_incoming_data
+    raise RemoteProtocolError("Server disconnected")
+httpcore.RemoteProtocolError: Server disconnected
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/py_clob_client_v2/http_helpers/helpers.py", line 63, in request
+    resp = _http_client.request(
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_client.py", line 825, in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.RemoteProtocolError: Server disconnected
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/udg/Documents/nba_strategy/scripts/live_runner.py", line 601, in <module>
+    main()
+  File "/Users/udg/Documents/nba_strategy/scripts/live_runner.py", line 523, in main
+    ask, bid, _ = book(client, p["token"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/Documents/nba_strategy/scripts/live_runner.py", line 125, in book
+    b = client.get_order_book(token)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/py_clob_client_v2/client.py", line 344, in get_order_book
+    return self._get(
+           ^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/py_clob_client_v2/client.py", line 231, in _get
+    return get(endpoint, headers=headers, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/py_clob_client_v2/http_helpers/helpers.py", line 93, in get
+    return request(endpoint, GET, headers, data, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/udg/.polymarket/venv/lib/python3.12/site-packages/py_clob_client_v2/http_helpers/helpers.py", line 90, in request
+    raise PolyApiException(error_msg="Request exception!")
+py_clob_client_v2.exceptions.PolyApiException: PolyApiException[status_code=None, error_message=Request exception!]

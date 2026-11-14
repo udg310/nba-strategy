@@ -1,0 +1,94 @@
+{"ev": "start", "live": true, "balance": 30.82367, "stake_frac": 0.05, "stake_now": {"A": 1.54, "C": 1.54, "D": 3.08}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-14/024507", "t": 1794624308.02394}
+{"ev": "trader_start", "gid": "401909298", "fav": "Heat", "pre": 0.565, "open0": 0, "t": 1794624311.8370938}
+{"ev": "resume_position", "gid": "401909299", "ch": "A", "outcome": "Bulls", "entry": 0.5, "size": 3.326531, "t": 1794624315.805971}
+{"ev": "trader_start", "gid": "401909299", "fav": "Hawks", "pre": 0.685, "open0": 1, "t": 1794624315.8068218}
+{"ev": "trader_start", "gid": "401909300", "fav": "Grizzlies", "pre": 0.605, "open0": 0, "t": 1794624319.110019}
+{"ev": "trader_start", "gid": "401909301", "fav": "Rockets", "pre": 0.905, "open0": 0, "t": 1794624322.5830898}
+{"ev": "signal", "gid": "401909300", "ch": "D", "outcome": "Grizzlies", "ask": 0.69, "usd": 3.08, "el": 2054.0, "m": 5, "t": 1794624333.1139252}
+{"ev": "buy", "gid": "401909300", "ch": "D", "outcome": "Grizzlies", "filled_shares": 4.463767, "entry": 0.69, "usd": 3.08, "tries": 1, "t": 1794624338.648557}
+{"ev": "CONFIRMED_BUY", "gid": "401909300", "ch": "D", "shares": 4.463767, "entry": 0.69, "t": 1794624338.649737}
+{"ev": "trader_start", "gid": "401909302", "fav": "Spurs", "pre": 0.845, "open0": 0, "t": 1794624367.833557}
+{"ev": "heartbeat", "balance": 27.7, "open": 2, "traders": 5, "positions": [["401909299", "A", "Bulls", 0.5, 3.326531], ["401909300", "D", "Grizzlies", 0.69, 4.463767]], "confirmed": {"buy": true, "sell": false}, "t": 1794624645.8388832}
+{"ev": "espn_err", "err": "The read operation timed out", "t": 1794624769.004986}
+{"ev": "exit", "gid": "401909299", "ch": "A", "reason": "target", "bid": 0.72, "entry": 0.5, "size": 3.326531, "t": 1794624905.930331}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+{"ev": "heartbeat", "balance": 27.7, "open": 2, "traders": 5, "positions": [["401909299", "A", "Bulls", 0.5, 3.326531], ["401909300", "D", "Grizzlies", 0.69, 4.463767]], "confirmed": {"buy": true, "sell": false}, "t": 1794624986.785443}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+{"ev": "heartbeat", "balance": 27.7, "open": 2, "traders": 5, "positions": [["401909299", "A", "Bulls", 0.5, 3.326531], ["401909300", "D", "Grizzlies", 0.69, 4.463767]], "confirmed": {"buy": true, "sell": false}, "t": 1794625312.146998}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"not enough balance / allowance: the balance is not enough -\u003e balance: 3326531, order amount: 3330000"}

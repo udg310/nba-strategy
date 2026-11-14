@@ -1,0 +1,114 @@
+{"ev": "start", "live": true, "balance": 29.939971, "stake_frac": 0.05, "stake_now": {"A": 1.5, "C": 1.5, "D": 2.99}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-14/032315", "t": 1794626596.126034}
+{"ev": "trader_start", "gid": "401909298", "fav": "Heat", "pre": 0.565, "open0": 0, "t": 1794626599.5582988}
+{"ev": "trader_start", "gid": "401909299", "fav": "Hawks", "pre": 0.685, "open0": 0, "t": 1794626603.294813}
+{"ev": "resume_position", "gid": "401909300", "ch": "D", "outcome": "Grizzlies", "entry": 0.69, "size": 4.463767, "t": 1794626606.991811}
+{"ev": "trader_start", "gid": "401909300", "fav": "Grizzlies", "pre": 0.605, "open0": 1, "t": 1794626606.9926772}
+{"ev": "trader_start", "gid": "401909301", "fav": "Rockets", "pre": 0.905, "open0": 0, "t": 1794626611.385748}
+{"ev": "trader_start", "gid": "401909302", "fav": "Spurs", "pre": 0.845, "open0": 0, "t": 1794626614.4776478}
+{"ev": "resume_position", "gid": "401909303", "ch": "C", "outcome": "Kings", "entry": 0.28, "size": 4.821429, "t": 1794626618.157283}
+{"ev": "trader_start", "gid": "401909303", "fav": "Trail Blazers", "pre": 0.805, "open0": 1, "t": 1794626618.1581922}
+{"ev": "heartbeat", "balance": 29.94, "open": 2, "traders": 6, "positions": [["401909300", "D", "Grizzlies", 0.69, 4.463767], ["401909303", "C", "Kings", 0.28, 4.821429]], "confirmed": {"buy": false, "sell": false}, "t": 1794626936.1873941}
+{"ev": "heartbeat", "balance": 29.94, "open": 2, "traders": 6, "positions": [["401909300", "D", "Grizzlies", 0.69, 4.463767], ["401909303", "C", "Kings", 0.28, 4.821429]], "confirmed": {"buy": false, "sell": false}, "t": 1794627258.442538}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.91, "el": 2480.0, "m": 5, "t": 1794627330.041792}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.94, "el": 2480.0, "m": 5, "t": 1794627359.140213}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.93, "el": 2480.0, "m": 5, "t": 1794627552.238644}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.94, "el": 2480.0, "m": 5, "t": 1794627562.011476}
+{"ev": "heartbeat", "balance": 29.94, "open": 2, "traders": 6, "positions": [["401909300", "D", "Grizzlies", 0.69, 4.463767], ["401909303", "C", "Kings", 0.28, 4.821429]], "confirmed": {"buy": false, "sell": false}, "t": 1794627580.92174}
+{"ev": "trader_start", "gid": "401909304", "fav": "Thunder", "pre": 0.675, "open0": 0, "t": 1794627647.274766}
+{"ev": "settle_hold", "gid": "401909300", "ch": "D", "outcome": "Grizzlies", "entry": 0.69, "size": 4.463767, "note": "held to resolution", "t": 1794627711.56563}
+{"ev": "trader_stop", "gid": "401909300", "open": 0, "t": 1794627711.866718}
+{"ev": "trader_released", "gid": "401909300", "remaining": 6, "t": 1794627711.867568}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.9, "el": 2480.0, "m": 5, "t": 1794627741.4229162}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.89, "el": 2480.0, "m": 5, "t": 1794627783.775251}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.9, "el": 2480.0, "m": 5, "t": 1794627793.193414}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.95, "el": 2480.0, "m": 5, "t": 1794627863.431475}
+{"ev": "heartbeat", "balance": 29.94, "open": 1, "traders": 6, "positions": [["401909303", "C", "Kings", 0.28, 4.821429]], "confirmed": {"buy": false, "sell": false}, "t": 1794627908.375943}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.94, "el": 2480.0, "m": 5, "t": 1794627923.445163}
+{"ev": "trader_stop", "gid": "401909298", "open": 0, "t": 1794627932.533341}
+{"ev": "trader_released", "gid": "401909298", "remaining": 5, "t": 1794627932.5343082}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.93, "el": 2480.0, "m": 5, "t": 1794627942.69759}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.9, "el": 2480.0, "m": 5, "t": 1794627974.95186}
+{"ev": "trader_stop", "gid": "401909299", "open": 0, "t": 1794627984.220717}
+{"ev": "trader_released", "gid": "401909299", "remaining": 4, "t": 1794627984.2214122}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.86, "el": 2480.0, "m": 5, "t": 1794628055.953045}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.79, "el": 2480.0, "m": 5, "t": 1794628074.999278}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.79, "el": 2480.0, "m": 5, "t": 1794628084.4371939}
+{"ev": "signal", "gid": "401909304", "ch": "C", "outcome": "Clippers", "ask": 0.34, "usd": 1.5, "el": 273.0, "m": -5, "ask_notional": 795.81, "asks": [[0.34, 2340.61], [0.35, 14455.04], [0.36, 11313.45], [0.37, 12420.49], [0.38, 5033.57]], "t": 17946
+{"ev": "buy", "gid": "401909304", "ch": "C", "outcome": "Clippers", "filled_shares": 4.545455, "entry": 0.35, "usd": 1.5, "tries": 1, "t": 1794628132.200879}
+{"ev": "CONFIRMED_BUY", "gid": "401909304", "ch": "C", "shares": 4.545455, "entry": 0.35, "t": 1794628132.201591}
+{"ev": "signal", "gid": "401909304", "ch": "A", "outcome": "Clippers", "ask": 0.36, "usd": 1.42, "el": 297.0, "m": -6, "ask_notional": 785.41, "asks": [[0.36, 2181.7], [0.37, 16085.94], [0.38, 32863.21], [0.39, 12194.29], [0.4, 15429.05]], "t": 17946
+{"ev": "buy", "gid": "401909304", "ch": "A", "outcome": "Clippers", "filled_shares": 3.944445000000001, "entry": 0.36, "usd": 1.42, "tries": 1, "t": 1794628160.195411}
+{"ev": "heartbeat", "balance": 26.92, "open": 3, "traders": 4, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001]], "confirmed": {"buy": t
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.8, "el": 2480.0, "m": 5, "t": 1794628335.407265}
+{"ev": "signal_skip_band", "gid": "401909301", "ch": "D", "ask": 0.87, "el": 2480.0, "m": 5, "t": 1794628376.777463}
+{"ev": "signal", "gid": "401909301", "ch": "D", "outcome": "Rockets", "ask": 0.76, "usd": 2.69, "el": 2480.0, "m": 5, "ask_notional": 958.2, "asks": [[0.76, 1260.79], [0.77, 13041.9], [0.78, 13248.9], [0.79, 11107.33], [0.8, 2364.63]], "t": 179462843
+{"ev": "buy", "gid": "401909301", "ch": "D", "outcome": "Rockets", "filled_shares": 3.53947, "entry": 0.76, "usd": 2.69, "tries": 1, "t": 1794628438.2692218}
+{"ev": "heartbeat", "balance": 28.67, "open": 4, "traders": 4, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001], ["401909301", "D", "Roc
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "heartbeat", "balance": 28.67, "open": 4, "traders": 4, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001], ["401909301", "D", "Roc
+{"ev": "heartbeat", "balance": 28.67, "open": 4, "traders": 4, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001], ["401909301", "D", "Roc
+{"ev": "settle_hold", "gid": "401909301", "ch": "D", "outcome": "Rockets", "entry": 0.76, "size": 3.53947, "note": "held to resolution", "t": 1794629491.944582}
+{"ev": "trader_stop", "gid": "401909301", "open": 0, "t": 1794629492.253702}
+{"ev": "trader_released", "gid": "401909301", "remaining": 3, "t": 1794629492.2543051}
+{"ev": "heartbeat", "balance": 28.67, "open": 3, "traders": 3, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001]], "confirmed": {"buy": t
+{"ev": "heartbeat", "balance": 28.67, "open": 3, "traders": 3, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001]], "confirmed": {"buy": t
+{"ev": "heartbeat", "balance": 28.67, "open": 3, "traders": 3, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001]], "confirmed": {"buy": t
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "heartbeat", "balance": 32.21, "open": 3, "traders": 3, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001]], "confirmed": {"buy": t
+[py_clob_client_v2] request error: The read operation timed out
+[py_clob_client_v2] request error: _ssl.c:993: The handshake operation timed out
+[py_clob_client_v2] request error: _ssl.c:993: The handshake operation timed out
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794631624.808009}
+[py_clob_client_v2] request error: [Errno 54] Connection reset by peer
+[py_clob_client_v2] request error: [Errno 54] Connection reset by peer
+[py_clob_client_v2] request error: [Errno 54] Connection reset by peer
+[py_clob_client_v2] request error: [Errno 54] Connection reset by peer
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794631633.8154519}
+[py_clob_client_v2] request error: [Errno 54] Connection reset by peer
+[py_clob_client_v2] request error: [Errno 54] Connection reset by peer
+{"ev": "exit", "gid": "401909304", "ch": "C", "reason": "target", "bid": 0.61, "entry": 0.35, "size": 4.545455, "t": 1794631643.4837198}
+{"ev": "heartbeat", "balance": 37.28, "open": 3, "traders": 3, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001]], "confirmed": {"buy": t
+{"ev": "heartbeat", "balance": 37.28, "open": 3, "traders": 3, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001]], "confirmed": {"buy": t
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "heartbeat", "balance": 37.28, "open": 3, "traders": 3, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "C", "Clippers", 0.35, 4.545455], ["401909304", "A", "Clippers", 0.36, 3.944445000000001]], "confirmed": {"buy": t
+{"ev": "sell_gave_up", "gid": "401909304", "ch": "C", "reason": "balance 0.0099", "t": 1794632545.255436}
+{"ev": "reconcile_closed", "gid": "401909304", "ch": "A", "t": 1794632545.756922}
+{"ev": "reconcile_closed", "gid": "401909304", "ch": "C", "t": 1794632546.238671}
+{"ev": "trader_stop", "gid": "401909302", "open": 0, "t": 1794632588.667658}
+{"ev": "trader_released", "gid": "401909302", "remaining": 2, "t": 1794632588.668362}
+{"ev": "heartbeat", "balance": 37.28, "open": 1, "traders": 2, "positions": [["401909303", "C", "Kings", 0.28, 4.821429]], "confirmed": {"buy": true, "sell": false}, "t": 1794632851.7423518}
+{"ev": "heartbeat", "balance": 37.28, "open": 1, "traders": 2, "positions": [["401909303", "C", "Kings", 0.28, 4.821429]], "confirmed": {"buy": true, "sell": false}, "t": 1794633175.1242769}
+{"ev": "signal_skip_band", "gid": "401909303", "ch": "D", "ask": 0.952, "el": 2664.0, "m": 9, "t": 1794633220.794671}
+{"ev": "signal_skip_band", "gid": "401909303", "ch": "D", "ask": 0.961, "el": 2664.0, "m": 9, "t": 1794633330.1602402}
+{"ev": "signal_skip_band", "gid": "401909304", "ch": "D", "ask": 0.83, "el": 2216.0, "m": 5, "t": 1794633382.080272}
+{"ev": "signal_skip_band", "gid": "401909303", "ch": "D", "ask": 0.989, "el": 2664.0, "m": 9, "t": 1794633391.397825}
+{"ev": "signal_skip_band", "gid": "401909303", "ch": "D", "ask": 0.989, "el": 2664.0, "m": 9, "t": 1794633443.107527}
+{"ev": "exit", "gid": "401909303", "ch": "C", "reason": "force", "bid": 0.015, "entry": 0.28, "size": 4.821429, "t": 1794633444.029152}
+{"ev": "signal_skip_band", "gid": "401909304", "ch": "D", "ask": 0.84, "el": 2216.0, "m": 5, "t": 1794633452.519983}
+{"ev": "signal_skip_band", "gid": "401909304", "ch": "D", "ask": 0.81, "el": 2216.0, "m": 5, "t": 1794633493.898655}
+{"ev": "heartbeat", "balance": 37.35, "open": 1, "traders": 2, "positions": [["401909303", "C", "Kings", 0.28, 4.821429]], "confirmed": {"buy": true, "sell": false}, "t": 1794633497.073445}
+{"ev": "signal_skip_band", "gid": "401909304", "ch": "D", "ask": 0.81, "el": 2216.0, "m": 5, "t": 1794633543.4621701}
+{"ev": "signal_skip_band", "gid": "401909304", "ch": "D", "ask": 0.79, "el": 2216.0, "m": 5, "t": 1794633562.834409}
+{"ev": "signal_skip_band", "gid": "401909304", "ch": "D", "ask": 0.82, "el": 2216.0, "m": 5, "t": 1794633582.3195672}
+{"ev": "signal", "gid": "401909304", "ch": "D", "outcome": "Thunder", "ask": 0.76, "usd": 3.73, "el": 2216.0, "m": 5, "ask_notional": 743.7, "asks": [[0.74, 1005.0], [0.75, 287.0], [0.76, 253.0], [0.77, 11351.0], [0.78, 5146.0]], "t": 1794633602.1962
+{"ev": "buy", "gid": "401909304", "ch": "D", "outcome": "Thunder", "filled_shares": 5.109588, "entry": 0.73, "usd": 3.73, "tries": 2, "t": 1794633609.123817}
+{"ev": "heartbeat", "balance": 29.79, "open": 2, "traders": 2, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "D", "Thunder", 0.73, 5.109588]], "confirmed": {"buy": true, "sell": false}, "t": 1794633823.036781}
+{"ev": "heartbeat", "balance": 29.79, "open": 2, "traders": 2, "positions": [["401909303", "C", "Kings", 0.28, 4.821429], ["401909304", "D", "Thunder", 0.73, 5.109588]], "confirmed": {"buy": true, "sell": false}, "t": 1794634156.237598}
+{"ev": "sell_gave_up", "gid": "401909303", "ch": "C", "reason": "no_bid", "t": 1794634347.321503}
+{"ev": "reconcile_closed", "gid": "401909303", "ch": "C", "t": 1794634347.8088078}
+{"ev": "trader_stop", "gid": "401909303", "open": 0, "t": 1794634350.2584052}
+{"ev": "trader_released", "gid": "401909303", "remaining": 1, "t": 1794634350.259053}
+{"ev": "heartbeat", "balance": 29.79, "open": 1, "traders": 1, "positions": [["401909304", "D", "Thunder", 0.73, 5.109588]], "confirmed": {"buy": true, "sell": false}, "t": 1794634496.021157}
+{"ev": "heartbeat", "balance": 29.79, "open": 1, "traders": 1, "positions": [["401909304", "D", "Thunder", 0.73, 5.109588]], "confirmed": {"buy": true, "sell": false}, "t": 1794634818.803489}
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794634986.2757828}
+{"ev": "heartbeat", "balance": 29.79, "open": 1, "traders": 1, "positions": [["401909304", "D", "Thunder", 0.73, 5.109588]], "confirmed": {"buy": true, "sell": false}, "t": 1794635269.365483}
+{"ev": "heartbeat", "balance": 29.79, "open": 1, "traders": 1, "positions": [["401909304", "D", "Thunder", 0.73, 5.109588]], "confirmed": {"buy": true, "sell": false}, "t": 1794635592.027118}
+{"ev": "settle_hold", "gid": "401909304", "ch": "D", "outcome": "Thunder", "entry": 0.73, "size": 5.109588, "note": "held to resolution", "t": 1794635805.7657988}
+{"ev": "trader_stop", "gid": "401909304", "open": 0, "t": 1794635806.070867}
+{"ev": "trader_released", "gid": "401909304", "remaining": 0, "t": 1794635806.071381}
+{"ev": "day_over", "games": 9, "t": 1794635806.071764}
+{"ev": "stopped", "open": 0, "balance": 29.785233, "traders": 0, "confirmed_buy": true, "confirmed_sell": false, "t": 1794635806.7615201}
+{"ev": "WARN", "msg": "a fill happened but no exit was confirmed", "t": 1794635806.7620559}

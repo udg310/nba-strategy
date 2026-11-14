@@ -75,7 +75,7 @@ python -m pip install -r scripts/requirements-executor-live.txt
 python -B -m unittest discover -s scripts -p "test*.py"
 ```
 
-两份原始文档保留了当时的实现背景：[执行后端需求](reports/go-order-execution-requirements.md) 与[后续待排期事项](reports/go-executor-live-reliability-requirements.md)。
+后端接手时可对照需求、代码和流程图。[执行需求与验收](reports/executor-requirements.md) · [提交 fa4ea64 实现说明](reports/executor-commit-guide.md) · [订单执行流程图](reports/executor-flow.html)
 
 ## 策略规则
 
@@ -163,7 +163,7 @@ python3 -I scripts/replay_live.py              # 回放 14 + 9 场实盘行情
 
 ### 旧版脚本的执行修复
 
-1. **重复下单。** 脚本在内存中跟踪已发送的请求。等待窗口内，它查询 `get_trades`，优先核对订单号和 `taker_order_id`，并阻止同一信号再次发单。到期仍未查到成交时，脚本会在没有其他已知仓位或未决请求共用该标的时检查持仓增量。这条旧路径的超时和重启限制见[执行后端需求文档](reports/go-order-execution-requirements.md)。
+1. **重复下单。** 脚本在内存中跟踪已发送的请求。等待窗口内，它查询 `get_trades`，优先核对订单号和 `taker_order_id`，并阻止同一信号再次发单。到期仍未查到成交时，脚本会在没有其他已知仓位或未决请求共用该标的时检查持仓增量。这条旧路径的超时和重启限制见[执行后端需求文档](reports/executor-requirements.md)。
 2. **卖出记账。** 每个仓位只卖出自己的份额，按成交记录确认。剩余不足 0.02 股的零头直接在账本中关闭，避免持续重试 15 分钟。
 3. **共享标的。** A、C 通道买入同一个代币时，各自仅卖出本通道持有的数量。
 4. **处理 400 `invalid amounts` 错误。** 市价买单强制使用 0.01 的报价单位。0.001 的舍入配置会生成 5 位小数的份额，服务器会拒绝该精度。

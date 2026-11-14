@@ -75,7 +75,7 @@ python -m pip install -r scripts/requirements-executor-live.txt
 python -B -m unittest discover -s scripts -p "test*.py"
 ```
 
-The original [backend requirements](reports/go-order-execution-requirements.md) and [follow-up backlog](reports/go-executor-live-reliability-requirements.md) are preserved as historical references (Chinese).
+Backend documentation in Chinese covers the [execution requirements and acceptance criteria](reports/executor-requirements.md), the [implementation guide for commit fa4ea64](reports/executor-commit-guide.md), and the [execution flow diagram](reports/executor-flow.html).
 
 ## Rules
 
@@ -175,7 +175,7 @@ The legacy runner starts with `./scripts/run_live.sh` for a dry run or `./script
 
 ### Execution fixes in the legacy runner
 
-1. **Duplicate orders.** During the waiting window, the runner tracks submitted requests in memory, checks `get_trades`, matches the order ID against `taker_order_id` when available and blocks another submission for the same signal. At the deadline it can check the balance increase if no other known position or pending order shares the token. The timeout and restart limitations of this path are documented in the [execution backend requirements (Chinese)](reports/go-order-execution-requirements.md).
+1. **Duplicate orders.** During the waiting window, the runner tracks submitted requests in memory, checks `get_trades`, matches the order ID against `taker_order_id` when available and blocks another submission for the same signal. At the deadline it can check the balance increase if no other known position or pending order shares the token. The timeout and restart limitations of this path are documented in the [execution backend requirements (Chinese)](reports/executor-requirements.md).
 2. **Sell accounting**: each position sells only its own shares; the trade
    record confirms the sell; a <0.02-share dust remainder is closed instead of
    retrying for 15 minutes.

@@ -2,7 +2,7 @@
 Description=Start the NBA live runner before the slate
 
 [Timer]
-OnCalendar=*-*-* 07:00:00 Asia/Hong_Kong
+OnCalendar=*-*-* 01:30:00 Asia/Hong_Kong
 Persistent=true
 RandomizedDelaySec=60
 

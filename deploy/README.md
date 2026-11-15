@@ -31,7 +31,7 @@ sudo -u nba /opt/nba-strategy/.venv/bin/python -I /opt/nba-strategy/scripts/live
 Check: `start` with balance, no exceptions. Ctrl+C to stop.
 
 ## 5. Live daily
-The timer starts the service at **07:00 Asia/Hong_Kong** every day; the runner
+The timer starts the service at **01:30 Asia/Hong_Kong** every day; the runner
 waits for tip-off, trades, then exits on `day_over`.
 ```sh
 systemctl list-timers nba-live.timer

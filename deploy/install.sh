@@ -9,7 +9,7 @@ apt-get install -y python3.12 python3.12-venv git curl jq
 id -u nba >/dev/null 2>&1 || adduser --disabled-password --gecos "" nba
 
 if [ -d /opt/nba-strategy/.git ]; then
-  sudo -u nba -H git -C /opt/nba-strategy pull --ff-only
+  sudo -u nba -H git -c safe.directory=/opt/nba-strategy -C /opt/nba-strategy pull --ff-only
 else
   sudo -u nba git clone https://github.com/udg310/nba-strategy /opt/nba-strategy
 fi

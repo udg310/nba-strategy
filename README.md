@@ -4,6 +4,24 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
+### Live trading (this repository's live path)
+
+`scripts/live_runner.py` is the live runner: one `GameTrader` per game, with a
+SQLite attempt ledger at `var/live_runner/attempts.db`. The signed order hash
+is written **before** the POST; a 200 response is never treated as a retryable
+rejection; one game/channel can have only one in-flight OPEN attempt. On
+restart, leftover `SUBMITTING` attempts become `UNKNOWN` and the channel is
+not re-entered. C uses the **30-minute game clock** (not wall clock); D exits
+on `m_fav < 0`.
+
+```sh
+export HTTPS_PROXY=http://127.0.0.1:9567   # CLOB SDK; direct endpoint is blocked
+./scripts/run_live.sh --live
+```
+
+The `scripts/executor.py` path above is a separate, alternative single-process
+implementation.
+
 ## NBA / Polymarket in-game strategy — A + C + D
 
 Strategy version **2026-11-14**. One Python process reads scores, evaluates the A/C/D strategy, executes orders and reconciles fills. After the console shows `executor ready` and `strategy started`, the strategy follows live ESPN scores and public Polymarket quotes and records simulated trades locally. Press **Ctrl+C** to stop.

@@ -53,7 +53,7 @@ SIGNAL_K = 3.0          # points
 ENTRY_DELAY = 15        # seconds after the signal
 MAX_WAIT = 180          # give up if no print this long after the delay
 TP = 0.20               # process channels: take profit, cents
-FORCE_EL = 2760         # process channels: Q4 6:00 remaining
+FORCE_EL = 2520         # process channels: Q4 6:00 remaining (2160 + 360)
 EXIT_COST = 0.01        # paid when selling at market
 # Real execution cost, measured on-chain 2026-11-13 with four live round trips
 # (0.23 / 0.29 / 0.40 / 0.81): the exchange charges about
@@ -93,7 +93,7 @@ CHANNELS = {
               pre_min=0.60, state=(5.0, 10.0), sign=None, tp=None,
               price_min=0.70, price_max=0.80, stop_margin=0.0),
 }
-D_EL_MIN = 2040         # D starts at Q3 6:00 remaining (was Q4 = 2400)
+D_EL_MIN = 1800         # D starts at Q3 6:00 remaining (1440 + 360)
 
 BASE_STAKE_FRAC = 0.05  # of capital, per unit of weight
 START_BAL = 100.0

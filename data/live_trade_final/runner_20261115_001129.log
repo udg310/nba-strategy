@@ -1,0 +1,239 @@
+{"ev": "start", "live": true, "balance": 29.785233, "stake_frac": 0.05, "stake_now": {"A": 1.49, "C": 1.49, "D": 2.98}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-15/001129", "t": 1794701490.046422}
+{"ev": "trader_start", "gid": "401909980", "fav": "Nuggets", "pre": 0.845, "open0": 0, "t": 1794701495.027978}
+{"ev": "heartbeat", "balance": 29.79, "open": 0, "traders": 1, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794701817.559278}
+{"ev": "heartbeat", "balance": 29.79, "open": 0, "traders": 1, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794702143.721791}
+{"ev": "espn_err", "err": "<urlopen error [Errno 54] Connection reset by peer>", "t": 1794702274.010893}
+{"ev": "heartbeat", "balance": 29.79, "open": 0, "traders": 1, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794702483.6813471}
+{"ev": "heartbeat", "balance": 29.79, "open": 0, "traders": 1, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794702811.024053}
+{"ev": "espn_err", "err": "<urlopen error _ssl.c:993: The handshake operation timed out>", "t": 1794702848.482568}
+{"ev": "heartbeat", "balance": 29.79, "open": 0, "traders": 1, "positions": [], "confirmed": {"buy": false, "sell": false}, "t": 1794703156.262843}
+{"ev": "trader_start", "gid": "401909981", "fav": "Mavericks", "pre": 0.765, "open0": 0, "t": 1794703309.4746969}
+{"ev": "signal", "gid": "401909981", "ch": "A", "outcome": "Cavaliers", "ask": 0.3, "usd": 1.49, "el": 128.0, "m": -6, "ask_notional": 9.21, "asks": [[0.3, 30.69], [0.31, 1424.0], [0.32, 1829.94], [0.33, 2834.0], [0.34, 911.0]], "t": 1794703438.89139
+{"ev": "buy_posted", "gid": "401909981", "ch": "A", "ask": 0.3, "limit": 0.33, "order_id": "0x51709e4b0d194ee31199713a536d5844111f16aa6df8dabd58fa84a1ae322ad5", "usd": 1.49, "t": 1794703440.530609}
+{"ev": "signal", "gid": "401909981", "ch": "C", "outcome": "Cavaliers", "ask": 0.31, "usd": 1.41, "el": 134.0, "m": -4, "ask_notional": 631.84, "asks": [[0.31, 2038.2], [0.32, 2416.94], [0.33, 3264.0], [0.34, 258.0], [0.35, 10796.0]], "t": 1794703448
+{"ev": "buy", "gid": "401909981", "ch": "A", "outcome": "Cavaliers", "filled_shares": 4.966667, "entry": 0.3, "usd": 1.49, "tries": 1, "order_id": "0x51709e4b0d194ee31199713a536d5844111f16aa6df8dabd58fa84a1ae322ad5", "fills": 1, "el_in": 128.0, "t": 
+{"ev": "CONFIRMED_BUY", "gid": "401909981", "ch": "A", "shares": 4.966667, "entry": 0.3, "t": 1794703449.131677}
+{"ev": "buy_posted", "gid": "401909981", "ch": "C", "ask": 0.3, "limit": 0.33, "order_id": "0xef9df9be4ebc897ac969b4b5df3ab8657723a97cb97d5911b9bb3d53bcdf852a", "usd": 1.41, "t": 1794703450.0521688}
+{"ev": "buy", "gid": "401909981", "ch": "C", "outcome": "Cavaliers", "filled_shares": 4.7, "entry": 0.3, "usd": 1.41, "tries": 1, "order_id": "0xef9df9be4ebc897ac969b4b5df3ab8657723a97cb97d5911b9bb3d53bcdf852a", "fills": 1, "el_in": 134.0, "t": 17947
+{"ev": "heartbeat", "balance": 26.78, "open": 2, "traders": 2, "positions": [["401909981", "A", "Cavaliers", 0.3, 4.966667], ["401909981", "C", "Cavaliers", 0.3, 4.7]], "confirmed": {"buy": true, "sell": false}, "t": 1794703486.253977}
+{"ev": "heartbeat", "balance": 26.78, "open": 2, "traders": 2, "positions": [["401909981", "A", "Cavaliers", 0.3, 4.966667], ["401909981", "C", "Cavaliers", 0.3, 4.7]], "confirmed": {"buy": true, "sell": false}, "t": 1794703816.28555}
+{"ev": "heartbeat", "balance": 26.78, "open": 2, "traders": 2, "positions": [["401909981", "A", "Cavaliers", 0.3, 4.966667], ["401909981", "C", "Cavaliers", 0.3, 4.7]], "confirmed": {"buy": true, "sell": false}, "t": 1794704141.513872}
+{"ev": "heartbeat", "balance": 26.78, "open": 2, "traders": 2, "positions": [["401909981", "A", "Cavaliers", 0.3, 4.966667], ["401909981", "C", "Cavaliers", 0.3, 4.7]], "confirmed": {"buy": true, "sell": false}, "t": 1794704468.244031}
+{"ev": "heartbeat", "balance": 26.78, "open": 2, "traders": 2, "positions": [["401909981", "A", "Cavaliers", 0.3, 4.966667], ["401909981", "C", "Cavaliers", 0.3, 4.7]], "confirmed": {"buy": true, "sell": false}, "t": 1794704799.16464}
+{"ev": "trader_start", "gid": "401909984", "fav": "Timberwolves", "pre": 0.885, "open0": 0, "t": 1794705060.9518971}
+{"ev": "trader_start", "gid": "401909983", "fav": "Grizzlies", "pre": 0.625, "open0": 0, "t": 1794705072.522676}
+{"ev": "trader_start", "gid": "401909982", "fav": "Pistons", "pre": 0.605, "open0": 0, "t": 1794705119.832818}
+{"ev": "heartbeat", "balance": 26.78, "open": 2, "traders": 5, "positions": [["401909981", "A", "Cavaliers", 0.3, 4.966667], ["401909981", "C", "Cavaliers", 0.3, 4.7]], "confirmed": {"buy": true, "sell": false}, "t": 1794705139.832936}
+{"ev": "signal", "gid": "401909984", "ch": "C", "outcome": "Bulls", "ask": 0.13, "usd": 1.34, "el": 179.0, "m": -1, "ask_notional": 996.07, "asks": [[0.13, 7662.04], [0.14, 12593.82], [0.15, 18608.45], [0.16, 13015.34], [0.17, 80577.01]], "t": 179470
+{"ev": "buy_posted", "gid": "401909984", "ch": "C", "ask": 0.13, "limit": 0.16, "order_id": "0x784d6d063e20732901f90cd65ba0137f190b28d37f27bfbb1b255007dd9f9118", "usd": 1.34, "t": 1794705271.66162}
+{"ev": "buy", "gid": "401909984", "ch": "C", "outcome": "Bulls", "filled_shares": 10.307693, "entry": 0.13, "usd": 1.34, "tries": 1, "order_id": "0x784d6d063e20732901f90cd65ba0137f190b28d37f27bfbb1b255007dd9f9118", "fills": 1, "el_in": 179.0, "t": 17
+{"ev": "heartbeat", "balance": 25.39, "open": 3, "traders": 5, "positions": [["401909981", "A", "Cavaliers", 0.3, 4.966667], ["401909981", "C", "Cavaliers", 0.3, 4.7], ["401909984", "C", "Bulls", 0.13, 10.307693]], "confirmed": {"buy": true, "sell": 
+{"ev": "signal", "gid": "401909984", "ch": "A", "outcome": "Bulls", "ask": 0.2, "usd": 1.27, "el": 285.0, "m": -7, "ask_notional": 1314.0, "asks": [[0.2, 6570.0], [0.21, 17625.98], [0.22, 15372.5], [0.23, 12060.82], [0.24, 25001.52]], "t": 1794705472
+{"ev": "buy_posted", "gid": "401909984", "ch": "A", "ask": 0.22, "limit": 0.25, "order_id": "0x4e9057ccc2442caafa59c443c879743a5a21e4b310c0283f58c1593803475882", "usd": 1.27, "t": 1794705475.262892}
+{"ev": "buy", "gid": "401909984", "ch": "A", "outcome": "Bulls", "filled_shares": 5.772728, "entry": 0.22, "usd": 1.27, "tries": 1, "order_id": "0x4e9057ccc2442caafa59c443c879743a5a21e4b310c0283f58c1593803475882", "fills": 1, "el_in": 285.0, "t": 179
+{"ev": "signal", "gid": "401909982", "ch": "C", "outcome": "Heat", "ask": 0.48, "usd": 1.2, "el": 145.0, "m": -4, "ask_notional": 86.28, "asks": [[0.49, 176.08], [0.5, 558.23], [0.51, 1756.65], [0.52, 13527.3], [0.53, 30488.1]], "t": 1794705651.4974}
+{"ev": "buy_posted", "gid": "401909982", "ch": "C", "ask": 0.5, "limit": 0.53, "order_id": "0x6aaccbc1bab198f263c362fe5480f7a4501ff4cccdd51a602b4e50a2503502c0", "usd": 1.2, "t": 1794705653.334056}
+{"ev": "buy", "gid": "401909982", "ch": "C", "outcome": "Heat", "filled_shares": 2.4, "entry": 0.5, "usd": 1.2, "tries": 1, "order_id": "0x6aaccbc1bab198f263c362fe5480f7a4501ff4cccdd51a602b4e50a2503502c0", "fills": 1, "el_in": 145.0, "t": 1794705662.
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794705682.3743832}
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794705721.343335}
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794705741.0997472}
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794705760.249887}
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794705770.098495}
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "heartbeat", "balance": 22.84, "open": 5, "traders": 5, "positions": [["401909981", "A", "Cavaliers", 0.3, 4.966667], ["401909981", "C", "Cavaliers", 0.3, 4.7], ["401909984", "C", "Bulls", 0.13, 10.307693], ["401909984", "A", "Bulls", 0.22, 5.
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794705813.0134232}
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794705842.217709}
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794705913.345952}
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794706004.3382819}
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794706023.821922}
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794706052.9674659}
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794706091.922732}
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "heartbeat", "balance": null, "open": 5, "traders": 5, "positions": [["401909981", "A", "Cavaliers", 0.3, 4.966667], ["401909981", "C", "Cavaliers", 0.3, 4.7], ["401909984", "C", "Bulls", 0.13, 10.307693], ["401909984", "A", "Bulls", 0.22, 5.7
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794706144.105609}
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794706163.589417}
+{"ev": "signal_skip_cap", "gid": "401909982", "ch": "A", "t": 1794706183.274783}
+{"ev": "exit", "gid": "401909981", "ch": "A", "reason": "target", "bid": 0.52, "entry": 0.3, "size": 4.966667, "t": 1794706186.505306}
+{"ev": "sell", "gid": "401909981", "ch": "A", "outcome": "Cavaliers", "reason": "target", "sold_shares": 4.96, "exit": 0.52, "remaining": 0.006667, "fills": 1, "t": 1794706199.539692}
+{"ev": "CONFIRMED_SELL", "gid": "401909981", "ch": "A", "sold_shares": 4.96, "exit": 0.52, "t": 1794706199.5403268}
+{"ev": "exit", "gid": "401909981", "ch": "C", "reason": "target", "bid": 0.55, "entry": 0.3, "size": 4.7, "t": 1794706200.29007}
+{"ev": "sell", "gid": "401909981", "ch": "C", "outcome": "Cavaliers", "reason": "target", "sold_shares": 4.7, "exit": 0.56, "remaining": 0.0, "fills": 1, "t": 1794706213.8807302}
+{"ev": "signal", "gid": "401909982", "ch": "A", "outcome": "Heat", "ask": 0.47, "usd": 1.4, "el": 181.0, "m": -7, "ask_notional": 9167.05, "asks": [[0.47, 19504.37], [0.48, 14232.11], [0.49, 13181.2], [0.5, 21167.09], [0.51, 2215.8]], "t": 1794706246
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error status=400 url=https://clob.polymarket.com/order body={"error":"order 0xc5e0faa5b061ce1b2ad20bfc81be8f6d1f050e5845548894be6f5b79c6508b82 is invalid. Duplicated."}
+{"ev": "buy_posted", "gid": "401909982", "ch": "A", "ask": 0.47, "limit": 0.5, "order_id": "0x0bcada8954ac8fa31970fc1044371b9621c6c77939347e28a6116d3c5d4c867f", "usd": 1.4, "t": 1794706249.938102}
+{"ev": "buy", "gid": "401909982", "ch": "A", "outcome": "Heat", "filled_shares": 2.978724, "entry": 0.47, "usd": 1.4, "tries": 2, "order_id": "0x0bcada8954ac8fa31970fc1044371b9621c6c77939347e28a6116d3c5d4c867f", "fills": 1, "el_in": 181.0, "t": 17947
+{"ev": "exit", "gid": "401909984", "ch": "C", "reason": "target", "bid": 0.35, "entry": 0.13, "size": 10.307693, "t": 1794706381.660901}
+{"ev": "sell", "gid": "401909984", "ch": "C", "outcome": "Bulls", "reason": "target", "sold_shares": 10.3, "exit": 0.35, "remaining": 0.007693, "fills": 1, "t": 1794706392.0135732}
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "heartbeat", "balance": 28.54, "open": 3, "traders": 5, "positions": [["401909984", "A", "Bulls", 0.22, 5.772728], ["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t"
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.91, "el": 2126.0, "m": 8, "t": 1794706758.4220119}
+{"ev": "heartbeat", "balance": 28.54, "open": 3, "traders": 5, "positions": [["401909984", "A", "Bulls", 0.22, 5.772728], ["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t"
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.91, "el": 2126.0, "m": 8, "t": 1794706767.915648}
+{"ev": "espn_err", "err": "<urlopen error _ssl.c:993: The handshake operation timed out>", "t": 1794706808.70309}
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.93, "el": 2126.0, "m": 8, "t": 1794706958.964212}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.93, "el": 2126.0, "m": 8, "t": 1794706978.050682}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.95, "el": 2126.0, "m": 8, "t": 1794707069.712789}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.95, "el": 2126.0, "m": 8, "t": 1794707089.1324701}
+{"ev": "heartbeat", "balance": 28.54, "open": 3, "traders": 5, "positions": [["401909984", "A", "Bulls", 0.22, 5.772728], ["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t"
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.94, "el": 2126.0, "m": 8, "t": 1794707128.393472}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.94, "el": 2126.0, "m": 8, "t": 1794707147.998946}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.9, "el": 2126.0, "m": 8, "t": 1794707170.685525}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.89, "el": 2126.0, "m": 8, "t": 1794707199.971947}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.88, "el": 2126.0, "m": 8, "t": 1794707209.383025}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.9, "el": 2126.0, "m": 8, "t": 1794707258.046576}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.88, "el": 2126.0, "m": 8, "t": 1794707329.610445}
+{"ev": "heartbeat", "balance": 28.54, "open": 3, "traders": 5, "positions": [["401909984", "A", "Bulls", 0.22, 5.772728], ["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t"
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.81, "el": 2126.0, "m": 8, "t": 1794707632.563016}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.83, "el": 2126.0, "m": 8, "t": 1794707671.811166}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.83, "el": 2126.0, "m": 8, "t": 1794707691.76722}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.81, "el": 2126.0, "m": 8, "t": 1794707730.583275}
+{"ev": "heartbeat", "balance": 28.54, "open": 3, "traders": 5, "positions": [["401909984", "A", "Bulls", 0.22, 5.772728], ["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t"
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.82, "el": 2126.0, "m": 8, "t": 1794707789.73683}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.86, "el": 2126.0, "m": 8, "t": 1794707922.509148}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.91, "el": 2126.0, "m": 8, "t": 1794707961.316406}
+{"ev": "exit", "gid": "401909984", "ch": "A", "reason": "target", "bid": 0.45, "entry": 0.22, "size": 5.772728, "t": 1794708050.084049}
+{"ev": "sell", "gid": "401909984", "ch": "A", "outcome": "Bulls", "reason": "target", "sold_shares": 5.77, "exit": 0.47, "remaining": 0.002728, "fills": 1, "t": 1794708064.1119459}
+{"ev": "heartbeat", "balance": 31.18, "open": 2, "traders": 5, "positions": [["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t": 1794708091.595329}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.94, "el": 2126.0, "m": 8, "t": 1794708163.6488771}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.956, "el": 2126.0, "m": 8, "t": 1794708293.802471}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.976, "el": 2126.0, "m": 8, "t": 1794708324.201963}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.976, "el": 2126.0, "m": 8, "t": 1794708364.502944}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.979, "el": 2126.0, "m": 8, "t": 1794708384.133402}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.98, "el": 2126.0, "m": 8, "t": 1794708403.4945862}
+{"ev": "heartbeat", "balance": 31.18, "open": 2, "traders": 5, "positions": [["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t": 1794708420.250957}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.975, "el": 2126.0, "m": 8, "t": 1794708424.032459}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.962, "el": 2126.0, "m": 8, "t": 1794708495.782586}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.962, "el": 2126.0, "m": 8, "t": 1794708553.997642}
+[py_clob_client_v2] request error: Server disconnected
+[py_clob_client_v2] request error: Server disconnected
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794708573.277424}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.993, "el": 2126.0, "m": 8, "t": 1794708664.924298}
+{"ev": "heartbeat", "balance": 31.18, "open": 2, "traders": 5, "positions": [["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t": 1794708746.156584}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.994, "el": 2126.0, "m": 8, "t": 1794708916.589731}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.997, "el": 2126.0, "m": 8, "t": 1794708936.421341}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.996, "el": 2126.0, "m": 8, "t": 1794708956.490287}
+{"ev": "heartbeat", "balance": 31.18, "open": 2, "traders": 5, "positions": [["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t": 1794709074.815469}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.996, "el": 2126.0, "m": 8, "t": 1794709098.15505}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.994, "el": 2126.0, "m": 8, "t": 1794709156.9922152}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.99, "el": 2126.0, "m": 8, "t": 1794709166.925847}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.997, "el": 2126.0, "m": 8, "t": 1794709219.9678159}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.996, "el": 2126.0, "m": 8, "t": 1794709317.855777}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.997, "el": 2126.0, "m": 8, "t": 1794709327.813965}
+{"ev": "heartbeat", "balance": 31.18, "open": 2, "traders": 5, "positions": [["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t": 1794709403.455914}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.994, "el": 2126.0, "m": 8, "t": 1794709430.043402}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.994, "el": 2126.0, "m": 8, "t": 1794709459.4581}
+{"ev": "heartbeat", "balance": 31.18, "open": 2, "traders": 5, "positions": [["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t": 1794709735.440385}
+{"ev": "signal_skip_band", "gid": "401909980", "ch": "D", "ask": 0.999, "el": 2126.0, "m": 8, "t": 1794709781.730561}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794709800.9112089}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794709833.702445}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794709843.711393}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794709873.0708869}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794709892.793174}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794709951.4756238}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794709971.897376}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794710011.3867562}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794710021.4334028}
+{"ev": "no_ask", "gid": "401909980", "ch": "D", "t": 1794710044.1383722}
+{"ev": "heartbeat", "balance": 31.18, "open": 2, "traders": 5, "positions": [["401909982", "C", "Heat", 0.5, 2.4], ["401909982", "A", "Heat", 0.47, 2.978724]], "confirmed": {"buy": true, "sell": true}, "t": 1794710063.906513}
+{"ev": "trader_stop", "gid": "401909980", "open": 0, "t": 1794710122.678447}
+{"ev": "trader_released", "gid": "401909980", "remaining": 4, "t": 1794710122.679314}
+{"ev": "exit", "gid": "401909982", "ch": "A", "reason": "target", "bid": 0.69, "entry": 0.47, "size": 2.978724, "t": 1794710329.3585238}
+{"ev": "sell", "gid": "401909982", "ch": "A", "outcome": "Heat", "reason": "target", "sold_shares": 2.97, "exit": 0.7000000000000001, "remaining": 0.008724, "fills": 1, "t": 1794710338.985431}
+{"ev": "heartbeat", "balance": 33.23, "open": 1, "traders": 4, "positions": [["401909982", "C", "Heat", 0.5, 2.4]], "confirmed": {"buy": true, "sell": true}, "t": 1794710390.082953}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.83, "el": 2092.0, "m": 8, "t": 1794710709.685157}
+{"ev": "heartbeat", "balance": 33.23, "open": 1, "traders": 4, "positions": [["401909982", "C", "Heat", 0.5, 2.4]], "confirmed": {"buy": true, "sell": true}, "t": 1794710716.1740532}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.86, "el": 2092.0, "m": 8, "t": 1794710798.600533}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.86, "el": 2092.0, "m": 8, "t": 1794710829.182882}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.94, "el": 2092.0, "m": 8, "t": 1794710868.0256798}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.95, "el": 2092.0, "m": 8, "t": 1794710887.572557}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.95, "el": 2092.0, "m": 8, "t": 1794710949.316957}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.97, "el": 2092.0, "m": 8, "t": 1794710969.1639411}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.97, "el": 2092.0, "m": 8, "t": 1794711020.6736698}
+{"ev": "exit", "gid": "401909982", "ch": "C", "reason": "time", "bid": 0.54, "entry": 0.5, "size": 2.4, "t": 1794711030.669152}
+{"ev": "heartbeat", "balance": 34.54, "open": 1, "traders": 4, "positions": [["401909982", "C", "Heat", 0.5, 2.4]], "confirmed": {"buy": true, "sell": true}, "t": 1794711043.712579}
+{"ev": "sell", "gid": "401909982", "ch": "C", "outcome": "Heat", "reason": "time", "sold_shares": 2.4, "exit": 0.56, "remaining": 0.0, "fills": 1, "t": 1794711044.020976}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.986, "el": 2092.0, "m": 8, "t": 1794711170.983992}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.989, "el": 2092.0, "m": 8, "t": 1794711190.565099}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.997, "el": 2092.0, "m": 8, "t": 1794711268.6442492}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.997, "el": 2092.0, "m": 8, "t": 1794711320.721712}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.996, "el": 2092.0, "m": 8, "t": 1794711359.7364302}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 4, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794711369.463059}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.993, "el": 2092.0, "m": 8, "t": 1794711379.8064902}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.993, "el": 2092.0, "m": 8, "t": 1794711389.53616}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.997, "el": 2092.0, "m": 8, "t": 1794711592.4789052}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.997, "el": 2092.0, "m": 8, "t": 1794711621.684733}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.997, "el": 2092.0, "m": 8, "t": 1794711641.240712}
+{"ev": "trader_stop", "gid": "401909981", "open": 0, "t": 1794711650.6808379}
+{"ev": "trader_released", "gid": "401909981", "remaining": 3, "t": 1794711650.681619}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.998, "el": 2092.0, "m": 8, "t": 1794711661.206623}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 3, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794711697.046986}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.998, "el": 2092.0, "m": 8, "t": 1794711864.064831}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.998, "el": 2092.0, "m": 8, "t": 1794711883.3828428}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 3, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794712023.50477}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.991, "el": 2092.0, "m": 8, "t": 1794712072.864602}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.995, "el": 2092.0, "m": 8, "t": 1794712134.612362}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.996, "el": 2092.0, "m": 8, "t": 1794712163.897748}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 3, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794712350.578479}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.998, "el": 2092.0, "m": 8, "t": 1794712426.307942}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.998, "el": 2092.0, "m": 8, "t": 1794712445.8116522}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.998, "el": 2092.0, "m": 8, "t": 1794712455.5404558}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.998, "el": 2092.0, "m": 8, "t": 1794712494.758212}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.998, "el": 2092.0, "m": 8, "t": 1794712627.855619}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.999, "el": 2092.0, "m": 8, "t": 1794712666.896211}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 3, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794712676.624214}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.999, "el": 2092.0, "m": 8, "t": 1794712686.857717}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.999, "el": 2092.0, "m": 8, "t": 1794712706.424355}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.999, "el": 2092.0, "m": 8, "t": 1794712748.817685}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.991, "el": 2092.0, "m": 8, "t": 1794712797.4543989}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.998, "el": 2092.0, "m": 8, "t": 1794712937.544298}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.997, "el": 2092.0, "m": 8, "t": 1794712980.0413098}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.997, "el": 2092.0, "m": 8, "t": 1794712999.39538}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 3, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794713002.569098}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.997, "el": 2092.0, "m": 8, "t": 1794713038.820252}
+{"ev": "signal_skip_band", "gid": "401909983", "ch": "D", "ask": 0.997, "el": 2092.0, "m": 8, "t": 1794713058.5837471}
+{"ev": "no_ask", "gid": "401909983", "ch": "D", "t": 1794713139.902349}
+{"ev": "trader_stop", "gid": "401909984", "open": 0, "t": 1794713188.5736058}
+{"ev": "trader_released", "gid": "401909984", "remaining": 2, "t": 1794713188.574485}
+{"ev": "no_ask", "gid": "401909983", "ch": "D", "t": 1794713299.244128}
+{"ev": "no_ask", "gid": "401909983", "ch": "D", "t": 1794713312.194908}
+{"ev": "no_ask", "gid": "401909983", "ch": "D", "t": 1794713328.537438}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 2, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794713328.776067}
+{"ev": "trader_stop", "gid": "401909983", "open": 0, "t": 1794713410.541096}
+{"ev": "trader_released", "gid": "401909983", "remaining": 1, "t": 1794713410.5418901}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 1, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794713656.8669498}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 1, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794713984.8564842}
+{"ev": "heartbeat", "balance": 34.54, "open": 0, "traders": 1, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794714312.746505}
+{"ev": "trader_stop", "gid": "401909982", "open": 0, "t": 1794714365.250134}
+{"ev": "trader_released", "gid": "401909982", "remaining": 0, "t": 1794714365.2510111}
+{"ev": "day_over", "games": 5, "t": 1794714365.251385}
+{"ev": "stopped", "open": 0, "balance": 34.543253, "traders": 0, "confirmed_buy": true, "confirmed_sell": true, "t": 1794714365.9032068}

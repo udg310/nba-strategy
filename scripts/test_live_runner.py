@@ -6,7 +6,7 @@
 Covers: one post per signal, trade-record confirmation / order-ID isolation,
 own-size sells + dust, D margin stop, C game-clock time exit, resume ledger.
 """
-import json, os, shutil, sys, time, unittest
+import json, os, shutil, sys, tempfile, time, unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -33,24 +33,35 @@ class LiveRunnerFixes(unittest.TestCase):
         lr.token_balance = lambda client, tok: 4.46
         self.n = 0
         self.orders = []
+        self.tmp = tempfile.mkdtemp(prefix="lr-ledger-")
+        lr.LEDGER = lr.AttemptLedger(os.path.join(self.tmp, "attempts.db"), "test")
 
-    def _order(self, side="SELL", fill=None):
-        def f(client, token, s, amount, price, tick):
+    def tearDown(self):
+        if lr.LEDGER is not None:
+            lr.LEDGER.close_path()
+            lr.LEDGER = None
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _order(self, side="SELL", fill=None, response=None):
+        def f(client, token, s, amount, price, tick, on_prepared=None):
             self.n += 1
             oid = f"o{self.n}"
             self.orders.append((oid, s, amount, price, tick))
+            if on_prepared:
+                on_prepared(oid)
             if fill is not None:
                 self.fake.trades.append({
                     "id": f"t{self.n}", "status": "CONFIRMED", "side": side,
                     "size": str(fill if fill >= 0 else amount),
                     "price": str(price), "match_time": str(int(time.time())),
                     "taker_order_id": oid})
-            return {"success": True, "orderID": oid}
+            resp = response if response is not None else {"success": True, "orderID": oid}
+            return resp, oid
         return f
 
     def _inflight(self, key="C", token="td", el=300.0):
         now = time.time()
-        return {"token": token, "outcome": "Dog", "usd": 3.73, "limit": 0.79,
+        return {"token": token, "outcome": "Dog", "ch": key, "usd": 3.73, "limit": 0.79,
                 "deadline": now + 15, "tries": 0, "style": "process",
                 "tp": 0.20, "ask": 0.76, "posted": False, "order_id": None,
                 "el_sig": el, "seen": set(), "t0": int(now) - 1, "base_bal": 0.0}
@@ -145,7 +156,7 @@ class LiveRunnerFixes(unittest.TestCase):
              "entry": 0.40, "size": 4.46, "t_in": now - 100,
              "el_in": 0.0, "style": "process", "tp": 0.20, "selling": False}
         t.positions.append(p)
-        # period 3, 6:00 -> elapsed 2040 >= 30*60
+        # period 3, 6:00 -> elapsed 1800 >= 30*60 (corrected clock)
         t._manage_exits({"state": "in", "period": 3, "detail": "6:00",
                          "home_score": 60, "away_score": 60}, now)
         self.assertNotIn(p, t.positions)
@@ -182,6 +193,58 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertEqual(plan[("g1", "C", "Dog")][1], 5.0)
         self.assertNotIn(("g1", "D", "Fav"), plan)
         self.assertIn(("g1", "D"), done)
+
+    # ---- a 200 with success:false is UNKNOWN, never a retryable rejection ----
+    def test_buy_200_success_false_is_posted_no_retry(self):
+        lr.book = lambda client, tok: (0.76, 0.75, "0.01")
+        lr.market_order = self._order(
+            "BUY", fill=None, response={"success": False, "status": "unmatched"})
+        t = lr.GameTrader("gb", RES, "HOME", True)
+        q = self._inflight()
+        t.inflight["C"] = q
+        now = time.time()
+        t._work_inflight(None, now)
+        self.assertEqual(len(self.orders), 1)
+        self.assertTrue(q.get("posted"))
+        t._work_inflight(None, now + 3)
+        self.assertEqual(len(self.orders), 1, "UNKNOWN must not repost")
+        row = lr.LEDGER.rows("gb")[0]
+        self.assertEqual(row["state"], "UNKNOWN")
+
+    # ---- one open attempt per game/channel, including after a restart ----
+    def test_duplicate_open_blocked(self):
+        aid, ok = lr.LEDGER.begin("gd", "C", "OPEN", "oid1", 1, el_in=100)
+        self.assertTrue(ok)
+        aid2, ok2 = lr.LEDGER.begin("gd", "C", "OPEN", "oid2", 2, el_in=200)
+        self.assertFalse(ok2)
+        self.assertIsNone(aid2)
+        self.assertTrue(lr.LEDGER.has_open("gd", "C"))
+        t = lr.GameTrader("gd", RES, "HOME", True)
+        self.assertIn("C", t.done)
+
+    def test_recover_submitting_unknown(self):
+        aid, ok = lr.LEDGER.begin("gr", "A", "OPEN", "o", 1, el_in=100)
+        self.assertTrue(ok)
+        lr.LEDGER.recover()
+        row = lr.LEDGER.rows("gr")[0]
+        self.assertEqual(row["state"], "UNKNOWN")
+        self.assertTrue(lr.LEDGER.has_open("gr", "A"))
+
+    # ---- token shares we did not account for are added to the position ----
+    def test_balance_extra_added(self):
+        lr.book = lambda client, tok: (0.60, 0.50, "0.01")
+        lr.token_balance = lambda client, tok: 5.957
+        lr.market_order = self._order("SELL", fill=-1)
+        t = lr.GameTrader("gx", RES, "HOME", True)
+        now = time.time()
+        p = {"gid": "gx", "ch": "C", "token": "td", "outcome": "Dog",
+             "entry": 0.40, "size": 2.979, "t_in": now - 10,
+             "el_in": 100.0, "style": "process", "tp": 0.20, "selling": False}
+        t.positions.append(p)
+        t._manage_exits({"state": "in", "period": 2, "detail": "6:00",
+                         "home_score": 50, "away_score": 50}, now)
+        self.assertAlmostEqual(p["size"], 5.957, places=6)
+        self.assertTrue(any(r.get("ev") == "reconcile_add" for r in self.logs))
 
 
 if __name__ == "__main__":

@@ -8,14 +8,14 @@ or [Chinese](../README.zh-CN.md) guide for recordings, account setup and the loc
 |---|---|
 | **`strategy.py`** | **the one strategy.** A/C/D, backtest, live replay. No other strategy file. |
 | **`nba_data.py`** | data / clock / HTTP / compact bundle. **No strategy rules.** |
-| `executor.py` | start the Python strategy, execution workers and local API in one process. |
-| `live_runner.py` | legacy live execution; one `GameTrader` per game (see top docstring). |
+| `executor.py` | alternative single-process strategy + SQLite executor (paper/live) from the collaborator branch. |
+| `live_runner.py` | **live execution**: one `GameTrader` per game + SQLite attempt ledger (one in-flight order per signal). |
 | `pm_creds.py` | credential helper; credentials stay in `~/.polymarket`. |
-| `run_live.sh` | launcher for the legacy live runner. |
+| `run_live.sh` | launcher for the live runner (`--live` for real orders). |
 | `make_bundle.py` | rebuild `data/backtest_bundle.json.gz` from raw sources. |
 | `replay_live.py` | replay the 14 historical + today's 9 live games. |
 | `swing_probe.py` | paper-only book recorder around score changes (maker research). |
-| `test_live_runner.py` | regression tests for the live execution fixes. |
+| `test_live_runner.py` | 10 regression tests: one-post/UNKNOWN, order-ID isolation, attempt uniqueness, restart recovery, sells, C30, D stop, balance reconciliation. |
 
 Everything else that used to live here (pendulum, fusion, halftime totals,
 NFL, account/fusion simulators, price strategy, research collector) is

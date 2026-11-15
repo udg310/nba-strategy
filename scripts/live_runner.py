@@ -44,6 +44,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nba_data as nd
 import strategy as S
 from executor_lock import account_lock
+from live_ledger import (AttemptLedger, SUBMITTING, ACCEPTED, UNKNOWN,
+                         FILLED, CLOSED, REJECTED_ZERO)
+from executor_clob import classify_post
 
 POLL = 3
 
@@ -66,6 +69,15 @@ LOCK = threading.Lock()
 ALL_POSITIONS = []
 CONFIRMED = {"buy": False, "sell": False}
 LOG_LOCK = threading.Lock()
+LEDGER = None            # AttemptLedger in live mode; None in dry-run/tests
+
+
+class DuplicateAttempt(Exception):
+    """An OPEN/CLOSE attempt already exists for this game/channel."""
+
+
+class PreparedAfterPost(Exception):
+    pass
 
 
 def log(rec):
@@ -103,7 +115,9 @@ def make_client():
                                      api_passphrase=creds["api_passphrase"]),
                       signature_type=int(env.get("POLY_SIGNATURE_TYPE", 3)),
                       funder=env["POLY_FUNDER"], use_server_time=True,
-                      retry_on_error=True)
+                      # No hidden SDK retry: a retried POST is a duplicate
+                      # order when the first one actually matched.
+                      retry_on_error=False)
 
 
 def balance(client):
@@ -159,7 +173,32 @@ def book(client, token):
            (b.get("tick_size") or "0.01")
 
 
-def market_order(client, token, side, amount, price_limit, tick):
+def _signed_market_order(client, token, side, amount, price_limit, tick):
+    """Build and sign the FOK order WITHOUT posting it; return (signed, oid).
+
+    The order hash is the identity the exchange's trade record uses as
+    `taker_order_id`, so it can be written to the attempt ledger before the
+    POST. If the POST outcome is unclear the reconciler still knows what to
+    look for.
+    """
+    from py_clob_client_v2.clob_types import (MarketOrderArgsV2, OrderType,
+                                              PartialCreateOrderOptions)
+    from py_clob_client_v2.order_builder.builder import ExchangeOrderBuilderV2
+    d = 3 if float(tick or "0.01") < 0.01 else 2
+    args = MarketOrderArgsV2(token_id=token, amount=round(amount, 2), side=side,
+                             price=round(price_limit, d), order_type=OrderType.FOK)
+    options = PartialCreateOrderOptions(tick_size=str(tick))
+    signed = client.create_market_order(args, options)
+    address = getattr(getattr(client, "builder", None), "funder", None) \
+        or load_env()["POLY_FUNDER"]
+    builder = ExchangeOrderBuilderV2(address, 137, client.signer,
+                                     domain_version="2")
+    oid = builder.build_order_hash(builder.build_order_typed_data(signed))
+    return signed, oid
+
+
+def market_order(client, token, side, amount, price_limit, tick,
+                 on_prepared=None):
     """amount = USD for BUY, shares for SELL; price_limit caps slippage.
 
     Market BUY orders are capped by the server at 2dp for the maker (USDC)
@@ -167,45 +206,17 @@ def market_order(client, token, side, amount, price_limit, tick):
     config asks for 5dp, which the server rejects with "invalid amounts".
     Buys therefore pass tick 0.01 explicitly; sells keep the book tick so a
     bid of 0.015 can still be hit.
+
+    `on_prepared(oid)` runs after signing, BEFORE `post_order`; it is where the
+    attempt ledger is written. It may raise to abort the submission.
     """
-    from py_clob_client_v2.clob_types import (MarketOrderArgsV2, OrderType,
-                                              PartialCreateOrderOptions)
-    d = 3 if float(tick or "0.01") < 0.01 else 2
-    args = MarketOrderArgsV2(token_id=token, amount=round(amount, 2), side=side,
-                             price=round(price_limit, d), order_type=OrderType.FOK)
-    return client.create_and_post_market_order(
-        args, PartialCreateOrderOptions(tick_size=str(tick)), OrderType.FOK)
-
-
-def _order_id(res):
-    if not isinstance(res, dict):
-        return None
-    for k in ("orderID", "orderId", "order_id", "id"):
-        if res.get(k):
-            return str(res[k])
-    return None
-
-
-def _post_status(res):
-    """Classify a CLOB order response.
-
-    posted   -> the exchange accepted/matched it; wait for the trade record
-    rejected -> it definitely did not fill; a retry cannot double the position
-    unknown  -> it may have reached the book; never repost while unknown
-    """
-    if not isinstance(res, dict):
-        return "unknown", None
-    if res.get("tradeIDs") or res.get("transactionsHashes"):
-        return "posted", None
-    if res.get("success") is True:
-        return "posted", None
-    state = str(res.get("status") or "").lower()
-    if state in ("matched", "filled", "delayed"):
-        return "posted", None
-    if res.get("success") is False or state in (
-            "canceled", "cancelled", "unmatched", "expired", "failed"):
-        return "rejected", str(res.get("errorMsg") or res.get("error") or res)[:120]
-    return "unknown", None
+    from py_clob_client_v2.clob_types import OrderType
+    signed, oid = _signed_market_order(client, token, side, amount,
+                                       price_limit, tick)
+    if on_prepared is not None:
+        on_prepared(oid)
+    res = client.post_order(signed, OrderType.FOK)
+    return res, oid
 
 
 def _price_step(tick):
@@ -312,6 +323,11 @@ class GameTrader(threading.Thread):
         self.positions = []
         self.inflight = {}
         self.seen_ids = set()      # trade IDs already attributed to a position
+        if LEDGER is not None:
+            # A persisted OPEN attempt means this game/channel was already
+            # sent once; never enter it again, even after a restart.
+            for row in LEDGER.open_rows(gid):
+                self.done.add(row["channel"])
 
     def put(self, snap):
         try:
@@ -419,7 +435,8 @@ class GameTrader(threading.Thread):
                      "usd": round(usd, 2), "balance": round(bal, 2)})
                 continue
             self.pending.add(key)
-            self.inflight[key] = {"token": tok, "outcome": side_out, "usd": usd,
+            self.inflight[key] = {"token": tok, "outcome": side_out, "ch": key,
+                                  "usd": usd,
                                   "limit": min(ask + MAX_SLIP, 0.99),
                                   "deadline": now + BUY_WINDOW, "tries": 0,
                                   "style": ch["style"], "tp": ch["tp"],
@@ -497,16 +514,21 @@ class GameTrader(threading.Thread):
         pos = {"gid": self.gid, "ch": key, "token": q["token"],
                "outcome": q["outcome"], "entry": entry, "size": shares,
                "t_in": time.time(), "el_in": q.get("el_sig"),
+               "position_id": q.get("attempt_id"),
                "style": q["style"], "tp": q["tp"], "selling": False}
         self.positions.append(pos)
         with LOCK:
             ALL_POSITIONS.append(pos)
             first = not CONFIRMED["buy"]
             CONFIRMED["buy"] = True
+        if LEDGER is not None and q.get("attempt_id"):
+            LEDGER.fill(q["attempt_id"])
         log({"ev": "buy", "gid": self.gid, "ch": key, "outcome": q["outcome"],
              "filled_shares": shares, "entry": entry,
              "usd": round(shares * entry, 2), "tries": q["tries"],
              "order_id": q.get("order_id"), "fills": nfills,
+             "attempt_id": q.get("attempt_id"),
+             "position_id": q.get("attempt_id"),
              "el_in": q.get("el_sig")})
         if first:
             log({"ev": "CONFIRMED_BUY", "gid": self.gid, "ch": key,
@@ -553,9 +575,12 @@ class GameTrader(threading.Thread):
                     continue
                 self.inflight.pop(key, None)
                 self.pending.discard(key)
+                if LEDGER is not None and q.get("attempt_id"):
+                    LEDGER.finish(q["attempt_id"], UNKNOWN)
                 log({"ev": "buy_gave_up", "gid": self.gid, "ch": key,
                      "tries": q["tries"], "posted": q.get("posted"),
                      "order_id": q.get("order_id"),
+                     "attempt_id": q.get("attempt_id"),
                      "reason": q.get("last_err")})
                 continue
 
@@ -604,19 +629,58 @@ class GameTrader(threading.Thread):
         limit = min(_round_up_tick(ask + MAX_SLIP, btick), 0.99)
         if limit < ask:
             return "rejected", {"err": f"limit {limit:.3f} < ask {ask:.3f}"}
+        prepared = {}
+
+        def on_prepared(oid):
+            # Runs after signing and BEFORE the POST.  The ledger row is the
+            # one-in-flight gate: if it already exists, abort the submission.
+            prepared["oid"] = oid
+            q["order_id"] = oid
+            if LEDGER is not None:
+                aid, ok = LEDGER.begin(self.gid, q["ch"], "OPEN", oid,
+                                       int(time.time()), el_in=q.get("el_sig"))
+                if not ok:
+                    raise DuplicateAttempt
+                prepared["aid"] = aid
+                q["attempt_id"] = aid
+
         try:
-            res = market_order(self.client, q["token"], "BUY",
-                               q["usd"], limit, btick)
+            res, oid = market_order(self.client, q["token"], "BUY",
+                                    q["usd"], limit, btick, on_prepared)
+        except DuplicateAttempt:
+            q["last_err"] = "duplicate OPEN"
+            q["deadline"] = 0
+            return "rejected", {"err": "duplicate OPEN"}
         except Exception as e:
+            if prepared.get("aid") and LEDGER is not None:
+                LEDGER.finish(prepared["aid"], UNKNOWN)
+            if prepared.get("oid"):
+                # The POST started but its outcome is unavailable.  Freeze
+                # this signal and reconcile from the trade record; never
+                # send a second order.
+                return "unknown", {"err": str(e)[:120],
+                                   "order_id": prepared["oid"]}
             status = getattr(e, "status_code", None)
             if status and 400 <= int(status) < 500:
                 return "rejected", {"err": str(e)[:120], "status": status}
-            return "unknown", {"err": str(e)[:120]}
-        status, err = _post_status(res)
-        if status == "rejected":
-            return "rejected", {"err": err, "res": res}
-        return status, {"err": err, "ask": ask, "limit": limit,
-                        "order_id": _order_id(res), "res": res}
+            return "rejected", {"err": str(e)[:120]}
+
+        c = classify_post(res, oid)
+        state = c.get("state", "UNKNOWN")
+        if LEDGER is not None and prepared.get("aid"):
+            LEDGER.finish(prepared["aid"],
+                          "REJECTED_ZERO" if state == "REJECTED_ZERO"
+                          else ("ACCEPTED" if state == "ACCEPTED" else "UNKNOWN"),
+                          oid)
+        if state == "REJECTED_ZERO":
+            # Documented FOK-unfilled -> zero execution, safe to retry once.
+            return "rejected", {"err": c.get("reason") or "FOK unfilled",
+                                "order_id": oid,
+                                "retryable": c.get("retryable", False)}
+        # ACCEPTED or UNKNOWN: the request was accepted by the exchange.
+        # Never re-post; let the trade record / balance reconciliation decide.
+        return "posted", {"err": None, "ask": ask, "limit": limit,
+                          "order_id": oid, "res": res, "state": state}
 
     # ---- exit ----
     def _manage_exits(self, g, now):
@@ -671,6 +735,20 @@ class GameTrader(threading.Thread):
                     continue
             else:
                 p.pop("zero_since", None)
+            # A missed fill (e.g. an earlier POST whose trade record was not
+            # attributed) shows up as token shares we do not account for.
+            # Add the excess to this position so it is sold/managed instead
+            # of sitting invisible in the wallet.
+            ours = sum(x["size"] for x in self.positions
+                       if x["token"] == p["token"])
+            if held is not None and held > ours + DUST:
+                extra = held - ours
+                p["size"] += extra
+                log({"ev": "reconcile_add", "gid": self.gid, "ch": p["ch"],
+                     "outcome": p["outcome"], "held": held,
+                     "accounted": round(ours, 6),
+                     "extra": round(extra, 6),
+                     "size": round(p["size"], 6)})
             _, bid, _ = book(self.client, p["token"])
             if bid is None and finished:
                 log({"ev": "no_exit", "gid": self.gid, "ch": p["ch"],
@@ -736,6 +814,7 @@ class GameTrader(threading.Thread):
                 if first:
                     log({"ev": "CONFIRMED_SELL", "gid": self.gid, "ch": p["ch"],
                          "sold_shares": sold, "exit": px})
+                self._close_attempt(p)
                 if p["size"] < DUST:
                     self._drop(p)
                     return
@@ -775,12 +854,18 @@ class GameTrader(threading.Thread):
                 last = info.get("err")
             time.sleep(RETRY_GAP)
         p["selling"] = False
+        self._close_attempt(p)
         if p["size"] < DUST:
             self._drop(p)
             return
         log({"ev": "sell_gave_up", "gid": self.gid, "ch": p["ch"],
              "outcome": p["outcome"], "reason": p.get("exit_reason"),
              "remaining": round(p["size"], 6), "last": last})
+
+    def _close_attempt(self, p):
+        if LEDGER is not None and p.get("close_attempt_id"):
+            LEDGER.close(p["close_attempt_id"])
+            p.pop("close_attempt_id", None)
 
     def _post_sell(self, p):
         bal = token_balance(self.client, p["token"])
@@ -794,18 +879,55 @@ class GameTrader(threading.Thread):
             return "rejected", {"err": "no_bid"}
         tick = str(tick or "0.01")
         limit = max(_round_down_tick(bid, tick), _price_step(tick))
+        prepared = {}
+
+        def on_prepared(oid):
+            prepared["oid"] = oid
+            p["order_id"] = oid
+            if LEDGER is not None:
+                aid, ok = LEDGER.begin(self.gid, p["ch"], "CLOSE", oid,
+                                       int(time.time()), el_in=p.get("el_in"),
+                                       position_id=p.get("position_id", ""))
+                if not ok:
+                    raise DuplicateAttempt
+                prepared["aid"] = aid
+                p["close_attempt_id"] = aid
+
         try:
-            res = market_order(self.client, p["token"], "SELL", qty, limit, tick)
+            res, oid = market_order(self.client, p["token"], "SELL", qty,
+                                    limit, tick, on_prepared)
+        except DuplicateAttempt:
+            row = next((r for r in (LEDGER.rows(self.gid) if LEDGER else [])
+                        if r["channel"] == p["ch"] and r["action"] == "CLOSE"),
+                       None)
+            if row:
+                p["close_attempt_id"] = row["attempt_id"]
+            return "posted", {"err": "duplicate CLOSE", "size": qty, "bid": bid,
+                              "order_id": row["order_id"] if row else None}
         except Exception as e:
+            if prepared.get("aid") and LEDGER is not None:
+                LEDGER.finish(prepared["aid"], UNKNOWN)
+            if prepared.get("oid"):
+                return "unknown", {"err": str(e)[:120], "size": qty,
+                                   "bid": bid, "order_id": prepared["oid"]}
             status = getattr(e, "status_code", None)
             if status and 400 <= int(status) < 500:
                 return "rejected", {"err": str(e)[:120], "status": status}
-            return "unknown", {"err": str(e)[:120], "size": qty, "bid": bid}
-        status, err = _post_status(res)
-        if status == "rejected":
-            return "rejected", {"err": err, "res": res}
-        return status, {"err": err, "size": qty, "bid": bid,
-                        "order_id": _order_id(res), "res": res}
+            return "rejected", {"err": str(e)[:120], "size": qty, "bid": bid}
+
+        c = classify_post(res, oid)
+        state = c.get("state", "UNKNOWN")
+        if LEDGER is not None and prepared.get("aid"):
+            LEDGER.finish(prepared["aid"],
+                          "REJECTED_ZERO" if state == "REJECTED_ZERO"
+                          else ("ACCEPTED" if state == "ACCEPTED" else "UNKNOWN"),
+                          oid)
+        if state == "REJECTED_ZERO":
+            return "rejected", {"err": c.get("reason") or "FOK unfilled",
+                                "size": qty, "bid": bid, "order_id": oid,
+                                "retryable": c.get("retryable", False)}
+        return "posted", {"err": None, "size": qty, "bid": bid,
+                          "order_id": oid, "res": res, "state": state}
 
     def _drop(self, p):
         if p in self.positions:
@@ -871,11 +993,28 @@ def resume_plan():
                         k = cand[0]
                 if k in pos:
                     pos[k]["sold"] = pos[k]["size"]
+    # Durable attempts catch a buy that was submitted before the process
+    # died and never reached the event log.  The channel is marked done so
+    # it cannot be entered again; the position is restored from the token
+    # balance / order's trade record in the main loop.
+    if LEDGER is not None:
+        for row in LEDGER.open_rows():
+            k = (row["game_id"], row["channel"], None)
+            if k in pos:
+                continue
+            pos[k] = {"entry": None, "size": 0.0, "sold": 0.0,
+                      "t_in": row["signal_at"], "el_in": row["el_in"],
+                      "order_id": row["order_id"],
+                      "attempt_id": row["attempt_id"],
+                      "position_id": row["position_id"]}
+            done.add((row["game_id"], row["channel"]))
     open_pos = {}
     for k, v in pos.items():
         rem = v["size"] - v["sold"]
-        if rem > DUST:
-            open_pos[k] = (v["entry"], rem, v.get("t_in"), v.get("el_in"))
+        if rem > DUST or (v.get("attempt_id") and v.get("order_id")):
+            open_pos[k] = (v["entry"], rem, v.get("t_in"), v.get("el_in"),
+                           v.get("order_id"), v.get("attempt_id"),
+                           v.get("position_id"))
     return open_pos, done
 
 
@@ -888,8 +1027,23 @@ def main():
     live = args.live and not args.dry_run
     if live:
         with account_lock(load_env()["POLY_FUNDER"]):
-            return run(live=True)
+            return _live_run()
     return run(live=False)
+
+
+def _live_run():
+    """Live run with the durable attempt ledger around it."""
+    global LEDGER
+    funder = load_env()["POLY_FUNDER"]
+    db = os.path.join(ROOT, "var", "live_runner", "attempts.db")
+    LEDGER = AttemptLedger(db, funder)
+    recovered = LEDGER.recover()
+    log({"ev": "ledger", "db": db, "recovered": recovered})
+    try:
+        return run(live=True)
+    finally:
+        LEDGER.close_path()
+        LEDGER = None
 
 
 def run(live):
@@ -934,43 +1088,75 @@ def run(live):
                 # recorded sizes split the token balance; handing the whole
                 # balance to each channel would double-count it.
                 by_tok = {}
-                for (gid, ch, outcome), (entry, size, t_in, el_in) in list(filled.items()):
+                for (gid, ch, outcome), (entry, size, t_in, el_in,
+                                          order_id, attempt_id, position_id) \
+                        in list(filled.items()):
                     if gid != g["gid"]:
                         continue
                     t.done.add(ch)                 # that channel already filled
-                    if (gid, ch) in resumed or outcome not in res["outcomes"]:
+                    if (gid, ch) in resumed:
+                        continue
+                    if outcome is None:
+                        # Attempt rows do not carry the outcome; derive it
+                        # from the channel side and the resolved market.
+                        outcome = res["fav"] if S.CHANNELS[ch]["side"] == "fav" \
+                            else next(o for o in res["outcomes"] if o != res["fav"])
+                    if outcome not in res["outcomes"]:
                         continue
                     tok = res["tokens"][res["outcomes"].index(outcome)]
                     by_tok.setdefault(tok, []).append(
-                        (ch, outcome, entry, size, t_in, el_in))
+                        (ch, outcome, entry, size, t_in, el_in,
+                         order_id, attempt_id, position_id))
                 for tok, items in by_tok.items():
                     held = token_balance(client, tok)
                     if held is None:
                         held = sum(x[3] for x in items)
                     if held is None or held < DUST:
                         continue
-                    total = sum(x[3] for x in items)
-                    if total <= 0:
-                        continue
-                    scale = held / total
-                    for ch, outcome, entry, size, t_in, el_in in items:
-                        alloc = size * scale
+                    ev_sizes = sum(x[3] for x in items if x[3] > 0)
+                    total = ev_sizes
+                    scale = held / total if total > 0 else 1.0
+                    remaining = max(0.0, held - ev_sizes)
+                    for ch, outcome, entry, size, t_in, el_in, order_id, \
+                            attempt_id, position_id in items:
+                        if size <= 0 and remaining > DUST:
+                            alloc = remaining
+                            remaining = 0.0
+                        else:
+                            alloc = size * scale
                         if alloc < DUST:
                             continue
+                        # An attempt without an event has no entry price;
+                        # recover it from the order's confirmed trade.
+                        if (entry is None or entry <= 0) and order_id:
+                            try:
+                                from py_clob_client_v2.clob_types import TradeParams
+                                for tr in client.get_trades(
+                                        TradeParams(asset_id=tok)) or []:
+                                    if str(tr.get("taker_order_id") or "") == str(order_id) \
+                                            and (tr.get("status") or "").upper() == "CONFIRMED":
+                                        entry = float(tr["price"])
+                                        break
+                            except Exception:
+                                pass
                         pos = {"gid": g["gid"], "ch": ch, "token": tok,
                                "outcome": outcome, "entry": entry or 0.5,
                                "size": alloc, "t_in": t_in or time.time(),
                                "el_in": el_in,
+                               "position_id": position_id or attempt_id,
                                "style": S.CHANNELS[ch]["style"],
                                "tp": S.CHANNELS[ch]["tp"], "selling": False}
                         t.positions.append(pos)
                         with LOCK:
                             ALL_POSITIONS.append(pos)
+                        if LEDGER is not None and attempt_id:
+                            LEDGER.fill(attempt_id)
                         resumed.add((g["gid"], ch))
                         log({"ev": "resume_position", "gid": g["gid"], "ch": ch,
                              "outcome": outcome, "entry": pos["entry"],
                              "size": alloc, "held": held, "recorded": size,
-                             "el_in": el_in})
+                             "el_in": el_in, "attempt_id": attempt_id,
+                             "position_id": pos["position_id"]})
                 t.start()
                 traders[g["gid"]] = t
             t.put(g)

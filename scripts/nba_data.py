@@ -106,7 +106,7 @@ def elapsed_of(period, clock):
     if "overtime" in dlow and period and period >= 5:
         return 2880.0 + 300.0 * (period - 5) + 300.0
     for marker, sec in (("end of 1st", 720.0), ("end of 2nd", 1440.0),
-                        ("end of 3rd", 2400.0)):
+                        ("end of 3rd", 2160.0)):
         if marker in dlow:
             return sec
     part = (clock or "").split(" - ")[0].strip()
@@ -120,7 +120,7 @@ def elapsed_of(period, clock):
         return None
     if period and period >= 5:                       # overtime: 5-minute periods
         return 2880.0 + 300.0 * (period - 5) + (300.0 - rem)
-    base = {1: 0, 2: 720, 3: 1680, 4: 2400}.get(period)
+    base = {1: 0, 2: 720, 3: 1440, 4: 2160}.get(period)
     if base is None:
         return None
     return base + (720.0 - rem)

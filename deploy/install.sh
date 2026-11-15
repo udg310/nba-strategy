@@ -9,13 +9,13 @@ apt-get install -y python3.12 python3.12-venv git curl jq
 id -u nba >/dev/null 2>&1 || adduser --disabled-password --gecos "" nba
 
 if [ -d /opt/nba-strategy/.git ]; then
-  sudo -u nba git -C /opt/nba-strategy pull --ff-only
+  sudo -u nba -H git -C /opt/nba-strategy pull --ff-only
 else
   sudo -u nba git clone https://github.com/udg310/nba-strategy /opt/nba-strategy
 fi
 
-sudo -u nba python3.12 -m venv /opt/nba-strategy/.venv
-sudo -u nba /opt/nba-strategy/.venv/bin/pip install -q \
+sudo -u nba -H python3.12 -m venv /opt/nba-strategy/.venv
+sudo -u nba -H /opt/nba-strategy/.venv/bin/pip install -q \
   -r /opt/nba-strategy/scripts/requirements-executor-live.txt
 
 mkdir -p /var/log/nba-live /home/nba/.polymarket

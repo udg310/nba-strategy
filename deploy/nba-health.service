@@ -1,0 +1,11 @@
+[Unit]
+Description=NBA live health check
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=nba
+Group=nba
+Environment=HOME=/home/nba
+EnvironmentFile=/etc/nba-live.env
+ExecStart=/opt/nba-strategy/deploy/health.sh

@@ -6,10 +6,12 @@ set -e
 cd "$(dirname "$0")/.."
 MODE="${1:---dry-run}"
 PROXY="${NBA_PROXY:-http://127.0.0.1:9567}"
-# The CLOB SDK needs the same proxy; the direct endpoint is blocked.
-export HTTPS_PROXY="$PROXY" HTTP_PROXY="$PROXY"
-if ! curl -s -m 5 -x "$PROXY" https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard >/dev/null; then
-  echo "proxy $PROXY 不可用，先开 VPN"; exit 1
+if [ -n "$PROXY" ]; then
+  # The CLOB SDK needs the same proxy; the direct endpoint is blocked locally.
+  export HTTPS_PROXY="$PROXY" HTTP_PROXY="$PROXY"
+  if ! curl -s -m 5 -x "$PROXY" https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard >/dev/null; then
+    echo "proxy $PROXY 不可用，先开 VPN"; exit 1
+  fi
 fi
 LOG="data/live_trade_final/runner_$(date -u +%Y%m%d_%H%M%S).log"
 mkdir -p data/live_trade_final

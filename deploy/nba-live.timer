@@ -1,0 +1,10 @@
+[Unit]
+Description=Start the NBA live runner before the slate
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 Asia/Hong_Kong
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

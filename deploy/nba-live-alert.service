@@ -1,0 +1,10 @@
+[Unit]
+Description=Alert when the NBA live runner fails
+
+[Service]
+Type=oneshot
+User=nba
+Group=nba
+Environment=HOME=/home/nba
+EnvironmentFile=/etc/nba-live.env
+ExecStart=/opt/nba-strategy/deploy/alert.sh

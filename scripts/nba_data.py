@@ -230,11 +230,13 @@ def abbr_of_name(name):
 # ---------------- HTTP (one proxy-aware client for probe + backtest) ----------------
 import ssl, urllib.request
 
+# Empty NBA_PROXY means direct; the HK server normally needs no proxy.
 PROXY = os.environ.get("NBA_PROXY", "http://127.0.0.1:9567")
 _CTX = ssl.create_default_context()
 _OPENER = urllib.request.build_opener(
     urllib.request.HTTPSHandler(context=_CTX),
-    urllib.request.ProxyHandler({"http": PROXY, "https": PROXY}))
+    urllib.request.ProxyHandler({"http": PROXY, "https": PROXY}) if PROXY
+    else urllib.request.ProxyHandler({}))
 
 
 def http_json(url, timeout=15, ua="nba-research"):

@@ -1,0 +1,26 @@
+[Unit]
+Description=NBA live runner (A/C/D + attempt ledger)
+After=network-online.target
+Wants=network-online.target
+OnFailure=nba-live-alert.service
+
+[Service]
+Type=simple
+User=nba
+Group=nba
+Environment=HOME=/home/nba
+EnvironmentFile=/etc/nba-live.env
+WorkingDirectory=/opt/nba-strategy
+ExecStart=/opt/nba-strategy/.venv/bin/python -I scripts/live_runner.py --live
+Restart=on-failure
+RestartSec=20
+RuntimeMaxSec=14h
+KillSignal=SIGINT
+TimeoutStopSec=90
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=append:/var/log/nba-live/runner.log
+StandardError=append:/var/log/nba-live/runner.log
+
+[Install]
+WantedBy=multi-user.target

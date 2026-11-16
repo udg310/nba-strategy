@@ -1,6 +1,7 @@
 .DS_Store
 /var/executor/
 /var/live_runner/
+/var/dashboard/
 __pycache__/
 *.pyc
 # raw backtest sources (rebuild with scripts/make_bundle.py; the bundle is committed)

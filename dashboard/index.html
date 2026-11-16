@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>稻香 · NBA 交易看板</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="top"><div class="shell topinner">
+    <a href="/" class="brand" aria-label="稻香 首页"><span class="brandmark" aria-hidden="true"><canvas class="brandball" id="brandBall" width="72" height="72"></canvas></span><span class="brandword">稻香</span></a>
+    <nav class="nav" aria-label="主导航">
+      <a id="navHome" href="/"><span aria-hidden="true">▦</span>交易总览</a>
+      <a id="navGames" href="/games"><span aria-hidden="true">◉</span>正在打</a>
+      <a id="navPositions" href="/positions"><span aria-hidden="true">▤</span>仓位</a>
+      <a id="navHistory" href="/activity"><span aria-hidden="true">◷</span>历史交易</a>
+    </nav>
+    <div class="envBox"><span class="chip" id="feedStatus">连接中</span><select class="envselect" id="environment" aria-label="交易环境"><option value="live">实盘</option><option value="paper">模拟盘</option></select></div>
+  </div></header>
+  <main class="shell page">
+    <div class="hero"><div><div class="context" lang="en">NBA Trading Desk</div><h1 id="heading">交易总览</h1><div class="heroMeta" id="headerMeta">香港时间 UTC+8</div></div>
+      <button class="outline" id="sourceButton">数据来源 <span aria-hidden="true">↗</span></button>
+    </div>
+    <div class="banner" id="sourceBanner" hidden></div>
+    <div class="banner" id="message" role="status" hidden></div>
+    <section id="gamesPanel" class="gamesPanel" aria-label="进行中的比赛" hidden>
+      <div class="panelhead"><div class="rowtitle"><h2>进行中</h2><span class="count" id="gameCount">—</span></div><span class="unit" id="gamesStatus"></span></div>
+      <div id="games"></div>
+    </section>
+    <section id="dashboard" aria-label="交易总览">
+      <div class="metrics" id="metrics"></div>
+      <div class="middle">
+        <section class="panel chartPanel"><div class="charthead"><div><h2>盈亏走势</h2><div class="chartLegend" id="chartLegend">累计盈亏</div></div>
+          <div class="ranges" id="ranges" aria-label="选择走势范围"><button data-range="today" aria-pressed="true">今日</button><button data-range="7d" aria-pressed="false">7 天</button><button data-range="30d" aria-pressed="false">30 天</button><button data-range="all" aria-pressed="false">全部</button></div>
+        </div><div class="plotWrap"><canvas id="chart" class="plot" tabindex="0" aria-label="累计盈亏走势图。使用左右方向键逐点查看。"></canvas><span id="chartEmpty"></span><div class="tooltip" id="tip" hidden></div></div><div id="chartFoot"></div></section>
+        <section class="panel side"><div class="panelhead"><div class="rowtitle"><h2>当前持仓</h2><span class="count" id="posCount">—</span></div><a id="allPositions" class="linkBtn" href="/positions">查看全部 →</a></div>
+          <div class="positions" id="positions"></div><div class="positionsFoot" id="posFoot">按买一估值</div></section>
+      </div>
+    </section>
+    <section class="panel tradepanel" id="activityPanel">
+      <div class="panelhead"><div class="rowtitle"><h2 id="ledgerTitle">今日交易</h2><span class="count" id="tradeCount">—</span></div>
+        <div class="filters"><label id="localKindLabel"><span class="sr">今日交易类型</span><select id="localKind"><option value="">全部类型</option><option value="buy">买入</option><option value="sell">卖出</option><option value="settlement">结算</option></select></label><a class="linkBtn" id="historyLink" href="/activity">历史交易 →</a></div></div>
+      <form id="historyFilters" class="filterbar" hidden>
+        <label>开始日期<input type="date" name="from" required></label><label>结束日期<input type="date" name="to" required></label>
+        <label>比赛 ID<input name="game_id" size="10"></label><label>通道<input name="channel" size="5"></label>
+        <label>交易类型<select name="kind"><option value="">全部类型</option><option value="buy">买入</option><option value="sell">卖出</option><option value="settlement">结算</option></select></label>
+        <label>仓位 ID<input name="position_id" size="11"></label><button class="action">查询</button>
+      </form>
+      <button class="update" id="refreshHistory" hidden>历史记录已更新 · 重新加载</button>
+      <div class="tablebox"><table class="ledger"><thead><tr><th>香港时间</th><th>交易</th><th>比赛 / 标的</th><th class="amount">单价 / 份</th><th class="amount">份额</th><th class="amount deskcol">成交 / 兑付额</th><th class="amount deskcol">手续费</th><th class="amount mobileHide">净收付</th><th class="deskcol">证据</th></tr></thead><tbody id="trades"></tbody></table></div>
+      <div class="empty" id="empty">正在读取交易…</div><button class="more" id="activityMore" hidden>加载更多交易</button>
+    </section>
+    <section class="panel" id="positionPanel" hidden>
+      <form class="filterbar" id="positionFilters">
+        <label>仓位范围<select name="view"><option value="open">当前持仓</option><option value="today">今日贡献（含已平仓）</option><option value="history">历史仓位</option></select></label>
+        <label>比赛 ID<input name="game_id" size="12"></label><label>通道<input name="channel" size="6"></label>
+        <label>排序<select name="sort"><option value="abs_unrealized">浮盈亏绝对值</option><option value="unrealized">未实现盈亏</option><option value="market_value">市值</option><option value="abs_today">今日贡献绝对值</option><option value="last_activity">最近活动</option></select></label><button class="action">查询</button>
+      </form><div id="positionList"></div><button class="more" id="positionMore" hidden>加载更多仓位</button>
+    </section>
+    <section class="panel" id="detailPanel" hidden><div id="detailContent"></div><button class="more" id="timelineMore" hidden>加载更多事件</button></section>
+    <footer class="footer"><span>稻香 · NBA 交易看板</span><span id="footerMeta">香港时间 UTC+8</span></footer>
+  </main>
+  <dialog id="dialog" aria-labelledby="dialogTitle"><div class="modalhead"><h2 id="dialogTitle"></h2><button class="close" aria-label="关闭详情" id="closeDialog">×</button></div><div id="dialogBody" class="modalbody"></div></dialog>
+  <noscript>请启用 JavaScript 以读取交易看板。</noscript>
+</body>
+</html>

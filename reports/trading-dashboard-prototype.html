@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>稻香 · NBA 交易看板</title>
+<style>
+:root{--paper:#f5f6f3;--white:#fff;--ink:#202620;--muted:#626b62;--line:#dee3db;--orange:#ee753d;--tint:#fff0e5;--green:#176947;--red:#ac493b;--mono:"IBM Plex Mono",Consolas,"SFMono-Regular",monospace;--sans:"DM Sans","Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;-webkit-font-smoothing:antialiased}button,select,input{font:inherit;color:inherit}button,select{cursor:pointer}button{background:transparent;border:0}button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible,canvas:focus-visible{outline:3px solid #df783f;outline-offset:3px}button:disabled{cursor:default;opacity:.55}[hidden]{display:none!important}h1,h2,h3,p{margin:0}h1{font-size:clamp(28px,3.2vw,42px);letter-spacing:-.065em;font-weight:750;line-height:1.2}h2{font-size:19px;letter-spacing:-.045em}button,select,input{touch-action:manipulation}.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.045em}.positive{color:var(--green)}.negative{color:var(--red)}.muted{color:var(--muted)}.shell{max-width:1472px;margin:auto;padding-inline:clamp(18px,3.8vw,62px)}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.icon{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:none}
+.top{background:#fff;border-bottom:1px solid var(--line)}.topinner,.brand,.nav,.nav button,.envBox,.headActions,.chip,.action,.cardtop,.panelhead,.charthead,.rowtitle,.identity,.tag,.filters,.minihead,.modalhead,.modalfoot{display:flex;align-items:center}.topinner{height:68px;gap:clamp(15px,3.5vw,56px)}.brand{gap:9px;color:var(--ink);white-space:nowrap;padding:0}.brandmark{background:#f58348;width:35px;height:35px;display:grid;place-items:center;border-radius:10px;color:#262820}.brandmark .icon{width:28px;height:28px}.brandword{font:800 20px/1 var(--sans);letter-spacing:-1.4px}.nav{align-self:stretch;gap:24px}.nav button{position:relative;color:var(--muted);gap:7px;padding:0 1px;white-space:nowrap;font-size:13px;font-weight:650}.nav button[aria-current=page]{color:var(--ink)}.nav button[aria-current=page]:after{content:"";position:absolute;bottom:0;height:3px;left:0;right:0;background:var(--orange);border-radius:3px 3px 0 0}.nav .icon{width:15px;height:15px}.envBox{margin-left:auto;gap:10px;white-space:nowrap}.chip,.envselect{min-height:30px;border-radius:7px;font-size:12px}.chip{gap:6px;padding:0 9px;background:#fbf0e5;border:1px solid #f0d7bc;color:#88491e;font-weight:650}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}.envselect{border:1px solid var(--line);background:white;padding:3px 6px;font-weight:650}.page{padding-top:32px;padding-bottom:35px}.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:22px}.context{font:700 11px/1.2 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:9px}.heroMeta{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;margin-top:11px;flex-wrap:wrap}.divider{color:#9ba39a}.headActions{gap:10px}.action{justify-content:center;gap:7px;background:#232a25;color:#fff;padding:11px 15px;border-radius:9px;font-weight:650;white-space:nowrap}.action:hover{background:#354337}.action .icon{color:#ffab77;width:16px;height:16px}.replayStatus{font-size:12px;color:var(--muted);white-space:nowrap}.replayStatus .dot{margin-right:5px;color:#77936d}.replayStatus.on .dot{color:#218652;box-shadow:0 0 0 3px #d9eadb}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}.metric,.panel{background:white;border:1px solid var(--line);border-radius:14px;overflow:hidden}.metric{text-align:left;position:relative;padding:16px 17px 15px;display:block;width:100%;min-width:0}.metric:hover{border-color:#b7c0b4}.metric.primary{background:#fff1e5;border-color:#edc8aa}.cardtop{gap:8px;color:#465145;font-weight:650;font-size:13px}.metricIcon,.sectIcon{width:29px;height:29px;display:grid;place-items:center;border-radius:8px;background:#f0f3ed;color:#475b49}.metric.primary .metricIcon{background:#ffdbc3;color:#a34b1b}.metricIcon .icon{width:16px;height:16px}.metricValue{display:block;margin:11px 0 12px;font-size:clamp(22px,2.4vw,38px);font-weight:700;line-height:1.04;color:var(--ink);white-space:nowrap;letter-spacing:-.07em}.cardbottom{display:flex;justify-content:space-between;align-items:flex-end;gap:4px}.cardnote{display:block;font-size:11px;color:var(--muted)}.spark{width:31%;height:24px;flex:none}
+.middle{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(315px,1fr);gap:18px;margin-bottom:18px}.chartPanel{background:#202a25;color:#fff;border-color:#28382f;padding:19px 20px 12px;position:relative;display:flex;flex-direction:column}.charthead,.panelhead,.minihead,.modalhead,.modalfoot{justify-content:space-between;gap:10px}.charthead{align-items:flex-start}.rowtitle{gap:9px}.chartPanel h2{color:#f6f8f3}.chartLegend{margin-top:7px;display:flex;gap:7px;align-items:center;color:#b7c4b8;font-size:11px}.chartLegend:before{content:"";width:15px;height:3px;border-radius:3px;background:#ff9c61}.ranges{display:flex;background:#18211c;border:1px solid #344338;padding:3px;border-radius:8px;gap:1px}.ranges button{padding:4px 8px;font-size:11px;white-space:nowrap;color:#bdc8bd;border-radius:5px}.ranges button[aria-pressed=true]{background:#e4ebdc;color:#263529;font-weight:700}.plotWrap{height:185px;position:relative;margin-top:9px;flex:1;min-height:175px}.plot{display:block;width:100%;height:100%;touch-action:pan-y}.tooltip{position:absolute;pointer-events:none;color:#f4f7ef;background:#111a15;border:1px solid #526958;border-radius:7px;padding:6px 10px;white-space:pre;font:11px/1.6 var(--mono);z-index:1;box-shadow:0 4px 15px #0002}.panelhead{padding:18px 19px 13px}.side{display:flex;flex-direction:column}.count{font:600 11px/1 var(--mono);background:#eef1ea;color:#526052;border-radius:6px;padding:5px 7px}.unit{font-size:11px;color:var(--muted)}.positions{padding:0 18px;display:flex;flex-direction:column;flex:1}.position{display:flex;width:100%;justify-content:space-between;align-items:center;gap:7px;text-align:left;border-top:1px solid var(--line);padding:12px 0;flex:1}.position:hover,.trade:hover{background:#f7f8f5}.identity{gap:10px;min-width:0}.team{width:37px;height:37px;border-radius:50%;display:grid;place-items:center;font:800 11px/1 var(--mono);letter-spacing:-.08em;flex:none;border:1px solid #0001}.gs{background:#f9e9bb;color:#72552b}.bos{background:#d9ebe0;color:#236544}.lal{background:#e9e0f3;color:#694885}.ny{background:#dae5f2;color:#365f85}.teamtext{min-width:0}.teamtext strong{display:block;font-size:13px}.sub{font-size:11px;color:var(--muted);margin-top:3px;display:block}.positionVal{text-align:right;white-space:nowrap}.positionVal b{font-size:17px}.positionsFoot{padding:9px 19px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);background:#fafbf8}
+.tradepanel .panelhead{flex-wrap:wrap;padding-bottom:14px}.linkBtn{font-size:12px;font-weight:650;display:inline-flex;align-items:center;gap:3px;padding:6px;color:#455448}.linkBtn:hover{text-decoration:underline}.linkBtn .icon{width:14px;height:14px}.tablebox{overflow-x:auto;scrollbar-width:thin}.ledger{border-collapse:collapse;width:100%;white-space:nowrap;text-align:left}.ledger th{font-size:11px;letter-spacing:.02em;background:#f7f8f5;color:#606b61;font-weight:600;border-block:1px solid var(--line);padding:9px 12px}.ledger td{padding:12px 12px;border-bottom:1px solid #edf0ea;font-size:13px}.ledger th:first-child,.ledger td:first-child{padding-left:19px}.ledger th:last-child,.ledger td:last-child{padding-right:19px}.ledger th.amount,.ledger td.amount{text-align:right}.trade{cursor:pointer}.time{font-size:12px}.kind{display:inline-flex;gap:5px;align-items:center;font-size:11px;font-weight:700;border-radius:5px;padding:4px 7px}.kind.buy{color:#296c4a;background:#e7f2e9}.kind.sell{color:#9a4c22;background:#faebdf}.kind.settle{color:#535e89;background:#eeedf9}.gameBtn{text-align:left;padding:0;font-size:13px;font-weight:650}.gameBtn:hover{text-decoration:underline}.channel{background:#f0f2ec;border:1px solid #e1e5da;border-radius:4px;font:600 10px/1 var(--mono);padding:2px 5px;margin-left:4px}.filters{gap:8px;flex-wrap:wrap}.filters select,.filters input,.outline{padding:6px 9px;background:white;border:1px solid var(--line);border-radius:7px;font-size:12px}.empty{text-align:center;color:var(--muted);padding:26px}.footer{display:flex;justify-content:space-between;gap:12px;margin-top:18px;font-size:11px;color:var(--muted)}dialog{position:fixed;margin:auto;border:1px solid var(--line);border-radius:16px;padding:0;color:var(--ink);width:min(550px,calc(100% - 24px));max-height:85vh;overflow:auto;box-shadow:0 20px 90px #14211f33}dialog::backdrop{background:#17221b72}.modalhead,.modalfoot{padding:15px 20px;border-bottom:1px solid var(--line)}.modalfoot{border-top:1px solid var(--line);border-bottom:0;justify-content:flex-end}.modalbody{padding:17px 20px}.close{width:30px;height:30px;border-radius:7px;background:#f0f3ee;font-size:20px}.detailGrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:12px 0}.detailGrid>div{background:#f9faf7;padding:10px}.detailGrid small{display:block;color:var(--muted);margin-bottom:4px}.detailItem{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.modalbody h3{font-size:14px;margin:14px 0 4px}.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#26352a;color:#fff;border:1px solid #52715a;border-radius:9px;padding:10px 15px;font-size:13px;z-index:5;box-shadow:0 5px 22px #0002}.flash{animation:flash 1.4s ease-out}@keyframes flash{from{background:#ffe4cc}to{background:transparent}}
+@media(min-width:1550px){.page{padding-top:40px}.metric{padding:20px}.plotWrap{min-height:230px}}
+@media(max-width:1000px){.middle{grid-template-columns:minmax(0,1.3fr) minmax(285px,1fr)}.metrics{gap:9px}.metric{padding:13px}.shell{padding-inline:22px}.chartPanel{padding:16px 14px 10px}.cardnote{font-size:10px}.nav{gap:16px}.replayStatus{display:none}}
+@media(max-width:760px){.shell{padding-inline:15px}.page{padding-top:20px}.topinner{height:auto;min-height:60px;gap:10px;flex-wrap:wrap}.brand{min-height:54px}.brandword{font-size:19px}.nav{order:3;width:100%;height:35px;gap:23px}.envBox{gap:5px}.hero{align-items:center;margin-bottom:15px}.heroMeta{margin-top:7px;gap:4px;font-size:10px}.context{font-size:9px}.headActions{gap:4px}.action{padding:9px 11px;font-size:12px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:12px}.metricValue{font-size:26px;margin:7px 0}.metricIcon{width:24px;height:24px}.middle{grid-template-columns:1fr;gap:12px;margin-bottom:12px}.chartPanel{min-height:234px}.positions{padding:0 14px}.position{padding:9px 0}.positionsFoot{padding:7px 14px}.panelhead{padding:14px}.ledger td{padding:10px}.footer{flex-wrap:wrap}.topinner .chip{font-size:10px}.charthead h2,h2{font-size:17px}.deskcol{display:none}}
+@media(max-width:440px){.topinner{gap:3px}.brandmark{width:30px;height:30px}.action{padding:9px}.charthead{gap:5px}.ranges button{padding:4px 6px}.ledger th:first-child,.ledger td:first-child{padding-left:10px}.ledger th,.ledger td{padding:7px 5px}.ledger td{font-size:11px}.ledger .gameBtn{font-size:11px}.ledger .sub,.ledger .channel{font-size:9px}.ledger .time{font-size:10px}.ledger .kind{padding:3px}.ledger .mobileHide{display:none}.tradepanel .panelhead{padding:13px 10px;gap:4px}.tradepanel .filters{gap:2px}.tradepanel .filters select{padding:4px;font-size:11px}.footer{font-size:10px}}
+.nav button{align-self:stretch}.plot{position:absolute;inset:0}.plotWrap{flex:1 0 166px}.middle{align-items:stretch}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;scroll-behavior:auto!important}}
+.demoGames{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));gap:12px;padding:0 18px 18px}.demoGame{padding:14px;border:1px solid var(--line);border-radius:9px;background:#fafbf8}.demoGame strong,.demoGame b{display:block}.demoGame b{font-size:22px;margin:9px 0}.demoGame small{color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="top"><div class="shell topinner">
+  <button type="button" class="brand" data-page="home" aria-label="稻香 首页"><span class="brandmark"><canvas class="icon" data-icon="ball" aria-hidden="true"></canvas></span><span class="brandword">稻香</span></button>
+  <nav class="nav" aria-label="主导航"><button type="button" data-page="home" aria-current="page"><canvas class="icon" data-icon="grid"></canvas>交易总览</button><button type="button" data-page="history"><canvas class="icon" data-icon="history"></canvas>历史交易</button></nav>
+  <div class="envBox"><span class="chip"><span class="dot"></span>演示数据</span><select class="envselect" id="environment" aria-label="展示账户"><option value="live">实盘视图</option><option value="paper">模拟盘视图</option></select></div>
+</div></header>
+<main class="shell page">
+  <div class="hero"><div><div class="context">NBA Trading Desk</div><h1 id="heading">交易总览</h1><div class="heroMeta"><span id="dayLabel"></span><span class="divider">/</span><span>香港时间</span><span class="num" id="clock"></span></div></div>
+  <div class="headActions"><span class="replayStatus" id="status"><i class="dot"></i>SSE 演示就绪</span><button type="button" class="action" id="play" aria-pressed="false"><canvas class="icon" data-icon="play"></canvas><span>播放成交推送</span></button></div></div>
+  <section id="dashboard" aria-label="交易总览">
+    <div class="metrics" id="metrics"></div>
+    <section class="panel" style="margin-bottom:18px"><div class="panelhead"><h2>进行中比赛盈亏</h2><span class="unit">演示数据 · USD</span></div><div class="demoGames" id="demoGames"></div></section>
+    <div class="middle">
+      <section class="panel chartPanel"><div class="charthead"><div><h2>盈亏走势</h2><div class="chartLegend">累计盈亏 · USD</div></div><div class="ranges" id="ranges" aria-label="选择走势范围"><button aria-pressed="true" data-range="1">今日</button><button aria-pressed="false" data-range="7">7 天</button><button aria-pressed="false" data-range="30">30 天</button><button aria-pressed="false" data-range="all">全部</button></div></div>
+      <div class="plotWrap"><canvas class="plot" id="chart" tabindex="0" aria-label="累计盈亏走势图，左右方向键可查看数据点"></canvas><div id="tip" class="tooltip" hidden></div></div></section>
+      <section class="panel side"><div class="panelhead"><div class="rowtitle"><h2>当前持仓</h2><span class="count" id="posCount">0</span></div><span class="unit">未实现盈亏 / USD</span></div><div class="positions" id="positions"></div><div class="positionsFoot" id="posFoot"></div></section>
+    </div>
+  </section>
+  <section class="panel tradepanel"><div class="panelhead"><div class="rowtitle"><h2 id="ledgerTitle">今日交易</h2><span class="count" id="tradeCount">0</span></div>
+  <div class="filters"><label id="dateWrap" hidden><span class="sr">历史交易日期</span><input type="date" id="historyDate"></label><label><span class="sr">交易类型</span><select id="kind"><option value="all">全部类型</option><option value="buy">买入</option><option value="sell">卖出</option><option value="settle">结算</option></select></label><button class="linkBtn" type="button" id="goHistory" data-page="history">历史交易<canvas class="icon" data-icon="arrow"></canvas></button></div></div>
+  <div class="tablebox"><table class="ledger"><thead><tr><th>香港时间</th><th>交易</th><th>比赛 / 标的</th><th class="amount">成交价</th><th class="amount">份额</th><th class="amount deskcol">成交额</th><th class="amount deskcol">手续费</th><th class="amount mobileHide">净收付</th></tr></thead><tbody id="trades"></tbody></table></div><div class="empty" id="empty" hidden></div></section>
+  <footer class="footer"><span>稻香 · NBA 交易看板</span><span>本地演示数据 · 美元计价 · 香港时间 UTC+8</span></footer>
+</main>
+<dialog id="detail" aria-labelledby="detailTitle"><div class="modalhead"><h2 id="detailTitle"></h2><button class="close" id="closeDetail" aria-label="关闭详情">×</button></div><div id="detailBody" class="modalbody"></div><div class="modalfoot"><button class="outline" id="done">关闭</button></div></dialog>
+<div id="notice" role="status" class="toast" hidden></div>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const DAY = 86400000, HK = 8 * 3600000;
+const dayStart = t => Math.floor((t + HK) / DAY) * DAY - HK;
+const dayKey = t => new Date(t + HK).toISOString().slice(0, 10);
+const timeFmt = new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Hong_Kong',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+const headerDate = new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Hong_Kong',year:'numeric',month:'long',day:'numeric',weekday:'long'});
+const money = cents => (Math.abs(cents)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const signed = cents => (cents > 0 ? '+' : cents < 0 ? '−' : '') + '$' + money(cents);
+const colorClass = val => val < 0 ? 'negative' : val > 0 ? 'positive' : '';
+const names = {buy:'买入', sell:'卖出', settle:'结算'};
+const teams = [
+  {abbr:'GSW',name:'勇士',opponent:'太阳',ch:'A',color:'gs',base:42,trend:23},
+  {abbr:'BOS',name:'凯尔特人',opponent:'热火',ch:'C',color:'bos',base:49,trend:12},
+  {abbr:'LAL',name:'湖人',opponent:'掘金',ch:'D',color:'lal',base:55,trend:-8},
+  {abbr:'NYK',name:'尼克斯',opponent:'篮网',ch:'D',color:'ny',base:50,trend:0}
+];
+const states = {};
+let env='live', page='home', range='1', model, selectedDay, filter='all', playing=false, timer, toastTimer, hovered=null, chartGeometry, detailRef=null, lastFlash=null;
+const startTime=Date.now();
+let businessDay=dayKey(startTime);
+
+// All prices and cash amounts use integer US cents; the fixtures never leave the browser.
+function add(st, when, id, team, kind, quantity, price) {
+  const gross=quantity*price;
+  const fee=kind==='quote' ? 0 : Math.round(gross*0.0015);
+  const item={seq:++st.seq,when,id,team,kind,quantity,price,gross,fee};
+  st.events.push(item);
+  return item;
+}
+function seed(mode,now) {
+  const st={seq:0,events:[],replays:0}, day=dayStart(now), scale=mode==='paper'?0.48:1;
+  const size=n=>Math.max(1,Math.round(n*scale));
+  for(let d=29;d>=1;d--) {
+    const t=day-d*DAY,i=d%3,id='old-'+d,price=36+(d*7)%24;
+    const edge=d%5===0 ? -9 : 6+(d*5)%17;
+    add(st,t+9*3600000,id,i,'buy',size(180+(d*23)%230),price);
+    add(st,t+12*3600000+d*45000,id,i,'sell',size(180+(d*23)%230),price+edge);
+  }
+  add(st,day-3600000,'active-0',0,'buy',size(430),40);
+  add(st,day-120000,'active-0',0,'quote',0,42);
+  const span=Math.max(0,(now-day)*0.975);
+  const stamp=f=>day+Math.floor(span*f);
+  const wave=[0,2,1,-1,-3,-1,1,4,3,2,1,3];
+  function mark(i,n){
+    const t=n/60,swing=wave[(n+i*3)%wave.length];
+    return Math.max(5,Math.min(95,Math.round(teams[i].base+teams[i].trend*t+swing+2*Math.sin(n*.39+i))));
+  }
+  for(let i=0;i<3;i++) add(st,stamp(.025+i*.008),'active-'+i,i,'buy',size(210+i*65),teams[i].base);
+  add(st,stamp(.09),'settled',3,'buy',size(66),47);
+  for(let n=4;n<=60;n++) {
+    for(let i=0;i<3;i++) add(st,stamp(n/60),'active-'+i,i,'quote',0,mark(i,n));
+    if(n%2===0 && n<58) {
+      const i=(n/2)%3, kind=n%8===0?'sell':'buy';
+      add(st,stamp(n/60),'active-'+i,i,kind,size(kind==='sell'?24+n:18+n%12),mark(i,n));
+    }
+  }
+  add(st,stamp(.89),'settled',3,'settle',size(66),100);
+  return st;
+}
+function calculate(st,now) {
+  const boundary=dayStart(now), positions=new Map(),trades=[],points=[];
+  const events=st.events.slice().sort((a,b)=>a.when-b.when || a.seq-b.seq);
+  let realized=0,baseline=0,openPnl=0,dayStarted=false;
+  for(const e of events) {
+    if(e.when>=boundary && !dayStarted){baseline=realized+openPnl;dayStarted=true}
+    let p=positions.get(e.id);
+    if(!p){p={id:e.id,team:e.team,qty:0,cost:0,real:0,mark:e.price,buyGross:0,buyQty:0,trades:[],dayBase:0,first:e.when};positions.set(e.id,p)}
+    openPnl-=p.qty*p.mark-p.cost;
+    if(e.kind==='buy'){
+      p.cost+=e.gross+e.fee;p.qty+=e.quantity;p.buyGross+=e.gross;p.buyQty+=e.quantity;
+    } else if(e.kind==='sell'||e.kind==='settle'){
+      const released=e.quantity===p.qty?p.cost:Math.round(p.cost*e.quantity/p.qty);
+      const net=e.gross-e.fee-released;
+      p.cost-=released;p.qty-=e.quantity;p.real+=net;realized+=net;
+    }
+    p.mark=e.price;p.last=e.when;
+    openPnl+=p.qty*p.mark-p.cost;
+    if(e.kind!=='quote'){p.trades.push(e);trades.push(e)}
+    if(e.when<boundary){p.dayBase=p.real+p.qty*p.mark-p.cost;baseline=realized+openPnl}
+    points.push({t:e.when,real:realized,unreal:openPnl,total:realized+openPnl});
+  }
+  const last=points[points.length-1] || {real:0,unreal:0,total:0};
+  return {positions, trades:trades.reverse(),points, summary:{...last,today:last.total-baseline},baseline};
+}
+states.live=seed('live',startTime);states.paper=seed('paper',startTime);
+selectedDay=dayKey(startTime-DAY);
+const metricInfo=[
+  ['today','今日盈亏','香港时间 00:00 起','sun'],
+  ['total','累计总盈亏','含未平仓盘口估值','chart'],
+  ['real','已实现盈亏','卖出与结算 · 已扣费','wallet'],
+  ['unreal','未实现盈亏','持仓按买一估值','pulse']
+];
+const paths={
+  ball:'M12 2.2a9.8 9.8 0 1 0 .01 0 M3 8.1c5.5 1.6 10.5 7 13.4 12.4 M6.6 19.7C11.5 16.7 16.3 10 17.5 4 M3 14.6C9.5 14.5 13.7 10.2 14.6 2.6 M10.2 21.7c.6-5.1 4.7-9.3 11.3-10',
+  grid:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
+  history:'M3.5 10a8.5 8.5 0 1 1 .3 6 M3 4v6h6 M12 7v5l3 2',
+  sun:'M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.7 5.7l1.5 1.5 M16.8 16.8l1.5 1.5 M5.7 18.3l1.5-1.5 M16.8 7.2l1.5-1.5 M16.5 12a4.5 4.5 0 1 1-9 0a4.5 4.5 0 1 1 9 0',
+  chart:'M3 18l6-6 4 3 8-10 M15 5h6v6',
+  wallet:'M4 7h16v12H4z M4 7l12-4v4 M15 11h6v5h-6z',
+  pulse:'M2 12h5l3-7 4 14 3-7h5',play:'M7 4l13 8-13 8z',pause:'M8 5v14 M16 5v14',arrow:'M5 12h14 M14 7l5 5-5 5'
+};
+function canvasSetup(c){
+  const box=c.getBoundingClientRect(),dpr=Math.min(3,window.devicePixelRatio||1);
+  if(box.width<1||box.height<1)return null;
+  const w=Math.round(box.width*dpr),h=Math.round(box.height*dpr);
+  if(c.width!==w||c.height!==h){c.width=w;c.height=h}
+  const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,box.width,box.height);
+  return {ctx,w:box.width,h:box.height};
+}
+function icons(){
+  document.querySelectorAll('canvas[data-icon]').forEach(c=>{
+    const g=canvasSetup(c);if(!g)return;
+    const {ctx,w,h}=g;ctx.save();ctx.scale(w/24,h/24);
+    ctx.strokeStyle=getComputedStyle(c).color;ctx.lineWidth=1.75;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke(new Path2D(paths[c.dataset.icon]));ctx.restore();
+  });
+}
+function renderCards(){
+  $('metrics').innerHTML=metricInfo.map(([key,text,note,icon],i)=>'<button class="metric '+(i===0?'primary':'')+'" data-metric="'+key+'"><span class="cardtop"><span class="metricIcon"><canvas class="icon" data-icon="'+icon+'"></canvas></span>'+text+'</span><b class="metricValue num">'+signed(model.summary[key])+'</b><span class="cardbottom"><span class="cardnote">'+note+'</span><canvas aria-hidden="true" class="spark" data-spark="'+key+'"></canvas></span></button>').join('');
+}
+function teamBadge(i){const t=teams[i];return '<span class="team '+t.color+'">'+t.abbr+'</span>'}
+function renderPositions(){
+  const open=[...model.positions.values()].filter(p=>p.qty>0);
+  open.sort((a,b)=>Math.abs(b.qty*b.mark-b.cost)-Math.abs(a.qty*a.mark-a.cost));
+  $('posCount').textContent=open.length;
+  $('positions').innerHTML=open.map(p=>{
+    const t=teams[p.team],unreal=p.qty*p.mark-p.cost;
+    return '<button class="position" data-pos="'+p.id+'"><span class="identity">'+teamBadge(p.team)+'<span class="teamtext"><strong>'+t.name+' 胜</strong><span class="sub">'+t.name+' vs '+t.opponent+' · '+t.ch+' 通道</span></span></span><span class="positionVal"><b class="num '+colorClass(unreal)+'">'+signed(unreal)+'</b><span class="sub">'+p.qty+' 份 · 买一 $'+money(p.mark)+'</span></span></button>';
+  }).join('')||'<p class="empty">暂无持仓</p>';
+  const value=open.reduce((sum,p)=>sum+p.qty*p.mark,0);
+  $('posFoot').textContent='持仓市值  $'+money(value)+'  ·  按最新演示盘口估值';
+}
+function netCash(e){return e.kind==='buy'?-(e.gross+e.fee):e.gross-e.fee}
+function renderGames(){
+  const examples=[['太阳 vs 勇士','active-0'],['热火 vs 凯尔特人','active-1'],
+    ['掘金 vs 湖人','active-2'],['公牛 vs 雄鹿',null]];
+  $('demoGames').innerHTML=examples.map(([name,id])=>{
+    const pos=model.positions.get(id),real=pos?.real||0,floating=pos?pos.qty*pos.mark-pos.cost:0;
+    return '<article class="demoGame"><strong>'+name+'</strong><b class="num '+colorClass(real+floating)+'">'+signed(real+floating)+'</b><small>已实现 '+signed(real)+' · 未实现 '+signed(floating)+'</small></article>';
+  }).join('');
+}
+function renderTrades(){
+  const day=page==='home'?businessDay:selectedDay;
+  const list=model.trades.filter(e=>dayKey(e.when)===day && (filter==='all'||e.kind===filter));
+  $('tradeCount').textContent=list.length;
+  $('trades').innerHTML=list.map(e=>{
+    const t=teams[e.team],net=netCash(e),stamp=timeFmt.format(e.when);
+    return '<tr class="trade '+(e.seq===lastFlash?'flash':'')+'" data-trade="'+e.seq+'"><td><span class="num time">'+stamp+'</span></td><td><span class="kind '+e.kind+'">'+names[e.kind]+'</span></td><td><button class="gameBtn" aria-label="查看 '+stamp+' '+names[e.kind]+' 详情">'+t.name+' vs '+t.opponent+'</button><span class="sub">'+t.name+' 胜 <span class="channel">'+t.ch+'</span></span></td><td class="amount num">'+(e.kind==='settle'?'—':'$'+money(e.price))+'</td><td class="amount num">'+e.quantity+'</td><td class="amount num deskcol">$'+money(e.gross)+'</td><td class="amount num deskcol">$'+money(e.fee)+'</td><td class="amount num mobileHide">'+signed(net)+'</td></tr>';
+  }).join('');
+  $('empty').hidden=list.length>0;
+  $('empty').textContent=filter!=='all'?'该日期没有此类交易':page==='home'?'今日暂无交易':'该日期暂无历史交易';
+}
+function displaySeries(){
+  const now=Date.now(),boundary=dayStart(now);
+  const start=range==='all'?(model.points[0]?.t||boundary):boundary-(Number(range)-1)*DAY;
+  const previous=model.points.filter(v=>v.t<start).at(-1)||{total:0,real:0,unreal:0};
+  const result=[{...previous,t:start}];
+  for(const point of model.points){
+    if(point.t<start)continue;
+    if(result.at(-1).t===point.t)result[result.length-1]=point;
+    else result.push(point);
+  }
+  if(result.at(-1).t<now)result.push({...result.at(-1),t:now});
+  return result;
+}
+function plotChart(){
+  if(page!=='home')return;
+  const g=canvasSetup($('chart'));if(!g)return;
+  const {ctx,w,h}=g,series=displaySeries(),l=48,r=w-9,top=12,b=h-23;
+  const vals=series.map(v=>v.total/100);
+  const rawMin=Math.min(...vals),rawMax=Math.max(...vals),span=Math.max(rawMax-rawMin,1);
+  const magnitude=Math.pow(10,Math.floor(Math.log10(span/3)));
+  const step=([1,2,2.5,5,10].find(k=>k*magnitude>=span/3)||10)*magnitude;
+  let min=Math.floor(rawMin/step)*step,max=Math.ceil(rawMax/step)*step;if(min===max)max+=step;
+  const first=series[0].t,last=series.at(-1).t;
+  const x=t=>l+(r-l)*(t-first)/Math.max(1,last-first), y=v=>b-(b-top)*(v-min)/(max-min);
+  ctx.font='10px Consolas,monospace';ctx.textAlign='right';ctx.textBaseline='middle';ctx.lineWidth=1;ctx.setLineDash([3,5]);
+  for(let v=min;v<=max+.001;v+=step){const py=y(v);ctx.strokeStyle='#455248';ctx.beginPath();ctx.moveTo(l,py);ctx.lineTo(r,py);ctx.stroke();ctx.fillStyle='#bcc8ba';ctx.fillText((v<0?'−$':'$')+Math.abs(v).toLocaleString('en-US',{maximumFractionDigits:1}),l-6,py)}
+  ctx.setLineDash([]);ctx.textBaseline='alphabetic';const ticks=w<420?4:6;
+  for(let i=0;i<ticks;i++){
+    const t=first+(last-first)*i/(ticks-1);
+    ctx.textAlign=i===0?'left':i===ticks-1?'right':'center';ctx.fillText(range==='1'?timeFmt.format(t).slice(0,5):dayKey(t).slice(5),x(t),h-4);
+  }
+  const line=new Path2D();series.forEach((p,i)=>{if(i===0)line.moveTo(x(p.t),y(p.total/100));else line.lineTo(x(p.t),y(p.total/100))});
+  const area=new Path2D(line);area.lineTo(r,b);area.lineTo(l,b);area.closePath();
+  const gradient=ctx.createLinearGradient(0,top,0,b);gradient.addColorStop(0,'rgba(242,150,87,.35)');gradient.addColorStop(1,'rgba(242,150,87,.015)');ctx.fillStyle=gradient;ctx.fill(area);
+  ctx.strokeStyle='#ff9e64';ctx.lineWidth=2.6;ctx.lineJoin='round';ctx.stroke(line);
+  const idx=hovered===null?series.length-1:Math.max(0,Math.min(series.length-1,hovered));
+  const pt=series[idx],px=x(pt.t),py=y(pt.total/100);
+  if(hovered!==null){ctx.setLineDash([4,4]);ctx.strokeStyle='#b7bfaf';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,top);ctx.lineTo(px,b);ctx.stroke();ctx.setLineDash([])}
+  ctx.fillStyle='#ffaf7c';ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill();
+  chartGeometry={series,x};
+  const tip=$('tip');tip.hidden=hovered===null;
+  if(!tip.hidden){tip.textContent=dayKey(pt.t).slice(5)+' '+timeFmt.format(pt.t)+'\n累计 '+signed(pt.total)+'\n已实现 '+signed(pt.real)+'\n未实现 '+signed(pt.unreal);tip.style.left=Math.max(0,Math.min(w-135,px+9))+'px';tip.style.top=Math.max(0,Math.min(h-89,py-50))+'px'}
+}
+function drawSparks(){
+  const pts=model.points.filter(p=>p.t>=dayStart(Date.now()));
+  document.querySelectorAll('canvas[data-spark]').forEach(c=>{
+    const g=canvasSetup(c);if(!g)return;
+    const {ctx,w,h}=g,key=c.dataset.spark,vals=pts.map(p=>key==='today'?p.total-model.baseline:p[key]);
+    if(!vals.length)vals.push(0,0);
+    const low=Math.min(...vals),high=Math.max(...vals);ctx.beginPath();
+    const increment=Math.max(1,Math.floor(vals.length/27));
+    for(let i=0;i<vals.length;i++){if(i%increment && i!==vals.length-1)continue;const x=1+(w-2)*i/Math.max(1,vals.length-1),y=h-3-(h-6)*(vals[i]-low)/Math.max(1,high-low);if(!i)ctx.moveTo(x,y);else ctx.lineTo(x,y)}
+    ctx.lineWidth=1.6;ctx.strokeStyle=key==='today'?'#ce7039':'#809882';ctx.lineJoin='round';ctx.stroke();
+  });
+}
+function field(label,value){return '<div><small>'+label+'</small><strong>'+value+'</strong></div>'}
+function displayDialog(title,html){
+  $('detailTitle').textContent=title;$('detailBody').innerHTML=html;
+  if(!$('detail').open)$('detail').showModal();
+}
+function openPosition(p){
+  const t=teams[p.team],unreal=p.qty*p.mark-p.cost;
+  const grid=field('剩余份额',p.qty+' 份')+field('剩余成本','$'+money(p.cost))+field('平均买入价','$'+money(p.buyGross/Math.max(1,p.buyQty)))+field('盘口买一',p.qty?'$'+money(p.mark):'已结清')+field('已实现盈亏',signed(p.real))+field('未实现盈亏',signed(unreal));
+  const rows=p.trades.slice().reverse().map(e=>'<div class="detailItem"><span><span class="kind '+e.kind+'">'+names[e.kind]+'</span> '+dayKey(e.when).slice(5)+' '+timeFmt.format(e.when)+'</span><button class="linkBtn" data-show-trade="'+e.seq+'">'+e.quantity+' 份 · $'+money(e.price)+' ›</button></div>').join('');
+  displayDialog(t.name+' 胜 · 仓位详情','<p>'+t.name+' vs '+t.opponent+' · '+t.ch+' 通道</p><div class="detailGrid">'+grid+'</div><h3>仓位流水</h3>'+rows);
+}
+function openTrade(e){
+  const t=teams[e.team];
+  const grid=field('动作',names[e.kind])+field('通道',t.ch)+field(e.kind==='settle'?'每份兑付':'成交价 / 份','$'+money(e.price))+field('数量',e.quantity+' 份')+field('金额','$'+money(e.gross))+field('实际手续费','$'+money(e.fee))+field('净收付',signed(netCash(e)))+field('记录来源','本地演示');
+  displayDialog(names[e.kind]+'明细','<p><strong>'+t.name+' vs '+t.opponent+'</strong> · '+t.name+' 胜</p><p class="sub">'+dayKey(e.when)+' '+timeFmt.format(e.when)+' · 香港时间 · 演示记录时间</p><div class="detailGrid">'+grid+'</div><div class="detailItem"><span class="muted">演示流水号</span><span class="num">DEMO-'+env.toUpperCase()+'-'+e.seq+'</span></div><button class="linkBtn" data-pos="'+e.id+'">查看该仓位全部交易 ›</button>');
+}
+function openMetric(key){
+  const info=metricInfo.find(m=>m[0]===key),sum=model.summary;
+  let html='<p class="sub">'+info[2]+' · USD · 演示数据</p><p class="metricValue num">'+signed(sum[key])+'</p>';
+  if(key==='total')html+='<div class="detailGrid">'+field('已实现盈亏',signed(sum.real))+field('未实现盈亏',signed(sum.unreal))+'</div>';
+  if(key==='today')html+='<div class="detailGrid">'+field('香港零点累计盈亏',signed(model.baseline))+field('当前累计盈亏',signed(sum.total))+'</div>';
+  const contributions=[...model.positions.values()].map(p=>{
+    const floating=p.qty*p.mark-p.cost;
+    const val=key==='today'?p.real+floating-p.dayBase:key==='unreal'?floating:key==='real'?p.real:floating+p.real;
+    return {p,val};
+  }).filter(({p,val})=>key==='today'?val!==0||p.trades.some(t=>dayKey(t.when)===businessDay):key==='unreal'?p.qty>0:val!==0).sort((a,b)=>Math.abs(b.val)-Math.abs(a.val));
+  html+='<h3>仓位贡献</h3>'+contributions.map(({p,val})=>'<div class="detailItem"><span>'+teams[p.team].name+' 胜 <span class="sub">'+dayKey(p.first)+' · '+(p.qty?'持仓中':'已平仓')+'</span></span><button class="linkBtn num '+colorClass(val)+'" data-pos="'+p.id+'">'+signed(val)+' ›</button></div>').join('');
+  displayDialog(info[1],html);
+}
+function paintDetail(){
+  if(!detailRef)return;
+  if(detailRef.type==='position')openPosition(model.positions.get(detailRef.value));
+  if(detailRef.type==='trade')openTrade(model.trades.find(e=>e.seq===Number(detailRef.value)));
+  if(detailRef.type==='metric')openMetric(detailRef.value);
+}
+function showDetail(type,value){detailRef={type,value};paintDetail()}
+function updateClock(now){
+  $('clock').textContent=timeFmt.format(now);$('dayLabel').textContent=headerDate.format(now);
+  $('historyDate').max=dayKey(dayStart(now)-1);
+}
+function render(){
+  model=calculate(states[env],Date.now());
+  const home=page==='home';$('dashboard').hidden=!home;$('dateWrap').hidden=home;$('goHistory').hidden=!home;
+  $('heading').textContent=home?'交易总览':'历史交易';$('ledgerTitle').textContent=home?'今日交易':'历史流水';
+  $('historyDate').value=selectedDay;$('kind').value=filter;
+  document.querySelectorAll('.nav [data-page]').forEach(b=>{if(b.dataset.page===page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+  if(home){renderCards();renderPositions();renderGames()}
+  renderTrades();icons();if(home){drawSparks();plotChart()}updateClock(Date.now());
+  if($('detail').open)paintDetail();
+}
+function notify(msg){
+  clearTimeout(toastTimer);$('notice').textContent=msg;$('notice').hidden=false;
+  toastTimer=setTimeout(()=>$('notice').hidden=true,2600);
+}
+function checkDay(now){
+  const next=dayKey(now);
+  if(next===businessDay)return false;
+  businessDay=next;selectedDay=dayKey(now-DAY);hovered=null;lastFlash=null;render();return true;
+}
+// Replay uses local synthetic records. No wallet, order endpoint, or server subscription is opened.
+function replay(){
+  const now=Date.now();checkDay(now);
+  const st=states[env],n=st.replays++,i=n%3,id='active-'+i,p=model.positions.get(id);
+  const kind=n%2===0&&p.qty>=8?'sell':'buy';
+  const qty=kind==='sell'?Math.min(13+n%6,p.qty):18+n%9;
+  const px=Math.max(3,Math.min(97,p.mark+(n%3===2?-2:2)));
+  const row=add(st,now,id,i,kind,qty,px);lastFlash=row.seq;
+  render();notify('演示推送 · '+teams[i].name+' 胜 · '+names[kind]+' '+qty+' 份');
+}
+function setPlaying(next){
+  clearInterval(timer);playing=next;
+  $('play').setAttribute('aria-pressed',String(next));$('play').querySelector('span').textContent=next?'暂停推送':'播放成交推送';
+  $('play').querySelector('canvas').dataset.icon=next?'pause':'play';
+  $('status').classList.toggle('on',next);$('status').innerHTML='<i class="dot"></i>'+(next?'SSE 本地回放中':'SSE 演示就绪');
+  if(next){replay();timer=setInterval(replay,8000)}else icons();
+}
+function navigate(target){
+  if(target!==page){page=target;filter='all';hovered=null;lastFlash=null;
+    if(target==='history')selectedDay=dayKey(Date.now()-DAY);
+    render();window.scrollTo(0,0);
+  }
+}
+document.addEventListener('click',event=>{
+  const target=event.target.closest('[data-page],[data-metric],[data-pos],[data-trade],[data-show-trade],[data-range]');
+  if(!target)return;
+  if(target.dataset.page){const hash=target.dataset.page==='history'?'#history':'#home';if(location.hash!==hash)location.hash=hash;navigate(target.dataset.page)}
+  else if(target.dataset.metric)showDetail('metric',target.dataset.metric);
+  else if(target.dataset.pos)showDetail('position',target.dataset.pos);
+  else if(target.dataset.trade||target.dataset.showTrade)showDetail('trade',target.dataset.trade||target.dataset.showTrade);
+  else if(target.dataset.range){range=target.dataset.range;hovered=null;document.querySelectorAll('[data-range]').forEach(b=>b.setAttribute('aria-pressed',String(b===target)));plotChart()}
+});
+window.addEventListener('hashchange',()=>navigate(location.hash==='#history'?'history':'home'));
+$('play').addEventListener('click',()=>setPlaying(!playing));
+$('environment').addEventListener('change',event=>{setPlaying(false);env=event.target.value;hovered=null;lastFlash=null;render()});
+$('kind').addEventListener('change',event=>{filter=event.target.value;renderTrades()});
+$('historyDate').addEventListener('change',event=>{const val=event.target.value;if(val&&val<businessDay){selectedDay=val;renderTrades()}else{event.target.value=selectedDay;notify('请选择昨天或更早的日期')}});
+for(const id of ['closeDetail','done'])$(id).addEventListener('click',()=>$('detail').close());
+$('detail').addEventListener('close',()=>detailRef=null);
+$('detail').addEventListener('click',e=>{if(e.target!==e.currentTarget)return;const b=e.currentTarget.getBoundingClientRect();if(e.clientX<b.left||e.clientX>b.right||e.clientY<b.top||e.clientY>b.bottom)e.currentTarget.close()});
+$('chart').addEventListener('pointermove',e=>{
+  if(!chartGeometry)return;
+  const px=e.clientX-e.currentTarget.getBoundingClientRect().left,{series,x}=chartGeometry;
+  hovered=series.reduce((best,p,i)=>Math.abs(x(p.t)-px)<Math.abs(x(series[best].t)-px)?i:best,0);plotChart();
+});
+function clearHover(){hovered=null;plotChart()}
+$('chart').addEventListener('pointerleave',clearHover);$('chart').addEventListener('blur',clearHover);
+$('chart').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Escape'].includes(e.key))return;e.preventDefault();if(e.key==='Escape')return clearHover();const end=chartGeometry.series.length-1;hovered=Math.max(0,Math.min(end,(hovered===null?end:hovered)+(e.key==='ArrowLeft'?-1:1)));plotChart()});
+new ResizeObserver(()=>{if(page==='home'){drawSparks();plotChart()}icons()}).observe(document.querySelector('.shell.page'));
+setInterval(()=>{const now=Date.now();if(!checkDay(now))updateClock(now)},1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDay(Date.now())});
+page=location.hash==='#history'?'history':'home';render();
+</script>
+</body>
+</html>

@@ -22,6 +22,25 @@ export HTTPS_PROXY=http://127.0.0.1:9567   # CLOB SDK; direct endpoint is blocke
 The `scripts/executor.py` path above is a separate, alternative single-process
 implementation.
 
+## 稻香 · NBA trading dashboard
+
+From the repository root, start the read-only dashboard with Python 3.12. It uses the standard library, listens on the local machine by default, and opens without a login.
+
+```sh
+python scripts/dashboard.py
+```
+
+| Page | What it shows |
+| --- | --- |
+| [Overview](http://127.0.0.1:8790/) | Account P&L, current holdings and every trade since 00:00 Hong Kong time, including price, quantity and time. |
+| [Live games](http://127.0.0.1:8790/games) | One card per NBA game in progress, including games with no recorded trades. Total, realized and unrealized P&L update through Server-Sent Events (SSE). Cards leave the page when the game ends. |
+| [Positions](http://127.0.0.1:8790/positions) | Entry prices, remaining shares, valuation and a per-position timeline of orders and fills. |
+| [Trade history](http://127.0.0.1:8790/activity) | Earlier Hong Kong trading days, with filters for date, game, channel and trade type. |
+
+**Reading P&L.** The dashboard uses recorded fees when available. An `≈` marks estimates, including sports taker fees calculated from shares and price. Open shares are valued at the current best bid or, once verified, the market's final payout price. Redemption enters realized P&L when the ledger records it. When a sale spans two channels, a reconciled combined result counts once in the total. A partial subtotal shows how many positions it covers.
+
+**Data sources.** Defaults are runner logs in `data/live_trade_final/` and the paper ledger at `var/executor/paper.db`. Use `--live-ledger PATH` to read a live executor ledger. Add `--no-runner` to use the ledger alone. The dashboard keeps its own cache in `var/dashboard/dashboard.db`. Run `python scripts/dashboard.py --help` for the available options. [Dashboard requirements and API (Chinese)](reports/trading-dashboard-requirements.md)
+
 ## NBA / Polymarket in-game strategy — A + C + D
 
 Strategy version **2026-11-14**. One Python process reads scores, evaluates the A/C/D strategy, executes orders and reconciles fills. After the console shows `executor ready` and `strategy started`, the strategy follows live ESPN scores and public Polymarket quotes and records simulated trades locally. Press **Ctrl+C** to stop.

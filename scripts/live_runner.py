@@ -457,6 +457,10 @@ class GameTrader(threading.Thread):
                     n_open = sum(1 for x in ALL_POSITIONS if x["ch"] != "L")
                     cap = MAX_OPEN
             if n_open >= cap:
+                if key == "L":
+                    # one lock per game: when the 3 slots are full, skip this
+                    # game rather than buy later at a higher (worse) price.
+                    self.done.add("L")
                 log({"ev": "signal_skip_cap", "gid": self.gid, "ch": key})
                 continue
             bal = balance(self.client)

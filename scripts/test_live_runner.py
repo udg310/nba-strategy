@@ -285,6 +285,18 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertNotIn(p, t.positions)
         self.assertTrue(any(r.get("ev") == "reconcile_closed" for r in self.logs))
 
+    # ---- lock channel: fires on a 12-point favourite lead, buys the favourite ----
+    def test_lock_signal_and_spec(self):
+        evs = [(0, 0, 0), (100, 11, 100), (200, 12, 200), (300, 20, 300)]
+        s = lr.lock_signal(evs)
+        self.assertIsNotNone(s)
+        self.assertEqual(s["margin"], 12)
+        self.assertEqual(s["el"], 200)
+        self.assertIsNone(lr.lock_signal([(0, 0, 0), (100, 11, 100)]))
+        spec = lr.channel_spec("L")
+        self.assertEqual(spec["side"], "fav")
+        self.assertEqual(spec["style"], "settle")
+
 
 if __name__ == "__main__":
     unittest.main()

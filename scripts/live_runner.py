@@ -55,6 +55,28 @@ MIN_ORDER = 1.0
 MAX_OPEN = 5
 CASH_RESERVE = 0.20
 
+# Lock channel: buy the favourite once it leads by >= LOCK_MARGIN (any time),
+# hold to settlement.  Separate pool and slot cap so it never crowds A/C/D.
+LOCK_FRAC = float(os.environ.get("LOCK_FRAC", "0.10"))
+MAX_OPEN_LOCK = 3
+LOCK_MARGIN = 12.0
+LOCK_ENABLED = os.environ.get("LOCK_ENABLED", "0") == "1"
+LOCK_CH = {"style": "settle", "side": "fav", "weight": 1.0, "tp": None,
+           "price_min": 0.0, "price_max": 0.985}
+
+
+def lock_signal(evs):
+    """Lock: the first moment the favourite leads by >= LOCK_MARGIN."""
+    for el, m, w in evs:
+        if m >= LOCK_MARGIN:
+            return {"el": el, "margin": m, "wall": w}
+    return None
+
+
+def channel_spec(ch):
+    """Spec for a channel; 'L' is the lock channel (not in strategy.CHANNELS)."""
+    return LOCK_CH if ch == "L" else S.CHANNELS[ch]
+
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
 SELL_WINDOW = 900
 MAX_SLIP = 0.03
@@ -396,12 +418,18 @@ class GameTrader(threading.Thread):
             return
         evs = self._events(g, now)
         pre = self.res.get("pre")
-        for key in ("A", "C", "D"):
+        for key in ("A", "C", "D", "L"):
             if key in self.done or key in self.pending:
                 continue
-            ch = S.CHANNELS[key]
-            sig = (S.process_signal(evs, pre, ch) if ch["style"] == "process"
-                   else S.settle_signal(evs, pre, ch))
+            if key == "L":
+                if not LOCK_ENABLED:
+                    continue
+                ch = LOCK_CH
+                sig = lock_signal(evs)
+            else:
+                ch = S.CHANNELS[key]
+                sig = (S.process_signal(evs, pre, ch) if ch["style"] == "process"
+                       else S.settle_signal(evs, pre, ch))
             if sig is None:
                 continue
             side_out = self.res["fav"] if ch["side"] == "fav" else \
@@ -422,14 +450,22 @@ class GameTrader(threading.Thread):
                      "ask": ask, "el": sig["el"], "m": sig["margin"]})
                 continue
             with LOCK:
-                n_open = len(ALL_POSITIONS)
-            if n_open >= MAX_OPEN:
+                if key == "L":
+                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] == "L")
+                    cap = MAX_OPEN_LOCK
+                else:
+                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] != "L")
+                    cap = MAX_OPEN
+            if n_open >= cap:
                 log({"ev": "signal_skip_cap", "gid": self.gid, "ch": key})
                 continue
             bal = balance(self.client)
             if bal is None:
                 continue
-            usd = min(bal * STAKE_FRAC * ch["weight"], bal * (1 - CASH_RESERVE))
+            if key == "L":
+                usd = min(bal * LOCK_FRAC, bal * (1 - CASH_RESERVE))
+            else:
+                usd = min(bal * STAKE_FRAC * ch["weight"], bal * (1 - CASH_RESERVE))
             if usd < MIN_ORDER:
                 log({"ev": "signal_skip_cash", "gid": self.gid, "ch": key,
                      "usd": round(usd, 2), "balance": round(bal, 2)})
@@ -1120,7 +1156,7 @@ def run(live):
                     if outcome is None:
                         # Attempt rows do not carry the outcome; derive it
                         # from the channel side and the resolved market.
-                        outcome = res["fav"] if S.CHANNELS[ch]["side"] == "fav" \
+                        outcome = res["fav"] if channel_spec(ch)["side"] == "fav" \
                             else next(o for o in res["outcomes"] if o != res["fav"])
                     if outcome not in res["outcomes"]:
                         continue
@@ -1165,8 +1201,8 @@ def run(live):
                                "size": alloc, "t_in": t_in or time.time(),
                                "el_in": el_in,
                                "position_id": position_id or attempt_id,
-                               "style": S.CHANNELS[ch]["style"],
-                               "tp": S.CHANNELS[ch]["tp"], "selling": False}
+                               "style": channel_spec(ch)["style"],
+                               "tp": channel_spec(ch)["tp"], "selling": False}
                         t.positions.append(pos)
                         with LOCK:
                             ALL_POSITIONS.append(pos)

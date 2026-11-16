@@ -703,7 +703,7 @@ class GameTrader(threading.Thread):
                              "outcome": p["outcome"], "reason": "margin_stop",
                              "bid": bid, "entry": p["entry"],
                              "size": p["size"], "m_fav": m_now})
-                        self._sell(p)
+                        self._sell(p, finished=(g["state"] == "post"))
                         continue
                 if g["state"] == "post":
                     log({"ev": "settle_hold", "gid": self.gid, "ch": p["ch"],
@@ -741,7 +741,14 @@ class GameTrader(threading.Thread):
             # of sitting invisible in the wallet.
             ours = sum(x["size"] for x in self.positions
                        if x["token"] == p["token"])
-            if held is not None and held > ours + DUST:
+            # A/C share the dog token.  If another channel's BUY is still in
+            # flight (posted but its trade record has not landed yet), the
+            # excess shares belong to that order, not to this position --
+            # folding them in here is what let C swallow A's fills.  Only
+            # reconcile shares that no pending order can explain.
+            pending_same = any(q["token"] == p["token"]
+                               for q in self.inflight.values())
+            if held is not None and held > ours + DUST and not pending_same:
                 extra = held - ours
                 p["size"] += extra
                 log({"ev": "reconcile_add", "gid": self.gid, "ch": p["ch"],
@@ -773,9 +780,9 @@ class GameTrader(threading.Thread):
             p["exit_reason"] = reason
             log({"ev": "exit", "gid": self.gid, "ch": p["ch"], "reason": reason,
                  "bid": bid, "entry": p["entry"], "size": p["size"]})
-            self._sell(p)
+            self._sell(p, finished=finished)
 
-    def _sell(self, p):
+    def _sell(self, p, finished=False):
         """Sell THIS position's shares only.
 
         The token balance may be shared by A and C; selling floor(balance)
@@ -856,6 +863,20 @@ class GameTrader(threading.Thread):
         p["selling"] = False
         self._close_attempt(p)
         if p["size"] < DUST:
+            self._drop(p)
+            return
+        # Unsellable positions must not retry forever.  A collapsed bid (no_bid
+        # / below the min tick) or an empty balance can never be sold, and once
+        # the game is final there is no bid at all.  Close them at zero so the
+        # trader reaches flat and day_over can fire instead of blocking until
+        # RuntimeMaxSec.
+        last_s = str(last)
+        if finished or last_s.startswith("qty 0"):
+            log({"ev": "reconcile_closed", "gid": self.gid, "ch": p["ch"],
+                 "outcome": p["outcome"],
+                 "why": "balance gone" if last_s.startswith("qty 0")
+                        else "game over, unsellable",
+                 "size": round(p["size"], 6), "last": last})
             self._drop(p)
             return
         log({"ev": "sell_gave_up", "gid": self.gid, "ch": p["ch"],

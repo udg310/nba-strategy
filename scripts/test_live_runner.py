@@ -246,6 +246,45 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertAlmostEqual(p["size"], 5.957, places=6)
         self.assertTrue(any(r.get("ev") == "reconcile_add" for r in self.logs))
 
+    # ---- a buy still in flight for the same token is not folded into C ----
+    def test_reconcile_add_skipped_when_buy_inflight(self):
+        lr.book = lambda client, tok: (0.60, 0.50, "0.01")
+        lr.token_balance = lambda client, tok: 5.957   # A's + C's shares
+        lr.market_order = self._order("SELL", fill=-1)
+        t = lr.GameTrader("gq", RES, "HOME", True)
+        now = time.time()
+        p = {"gid": "gq", "ch": "C", "token": "td", "outcome": "Dog",
+             "entry": 0.40, "size": 2.979, "t_in": now - 10,
+             "el_in": 100.0, "style": "process", "tp": 0.20, "selling": False}
+        t.positions.append(p)
+        # A's buy for the same token is posted but its fill is not recorded yet
+        t.inflight["A"] = {"token": "td", "ch": "A", "posted": True,
+                           "outcome": "Dog"}
+        t._manage_exits({"state": "in", "period": 2, "detail": "6:00",
+                         "home_score": 50, "away_score": 50}, now)
+        self.assertAlmostEqual(p["size"], 2.979, places=6)
+        self.assertFalse(any(r.get("ev") == "reconcile_add" for r in self.logs))
+
+    # ---- a final unsellable position is closed, not retried forever ----
+    def test_finished_unsellable_position_closes(self):
+        lr.book = lambda client, tok: (None, None, "0.01")   # no bid at all
+        lr.token_balance = lambda client, tok: 7.36
+        lr.market_order = self._order("SELL", fill=None)
+        old = lr.SELL_WINDOW
+        lr.SELL_WINDOW = 0.05
+        try:
+            t = lr.GameTrader("gx", RES, "HOME", True)
+            p = {"gid": "gx", "ch": "C", "token": "td", "outcome": "Dog",
+                 "entry": 0.50, "size": 7.36, "t_in": time.time(),
+                 "el_in": 100.0, "style": "process", "tp": 0.20,
+                 "selling": False}
+            t.positions.append(p)
+            t._sell(p, finished=True)
+        finally:
+            lr.SELL_WINDOW = old
+        self.assertNotIn(p, t.positions)
+        self.assertTrue(any(r.get("ev") == "reconcile_closed" for r in self.logs))
+
 
 if __name__ == "__main__":
     unittest.main()

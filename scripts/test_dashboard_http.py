@@ -148,6 +148,27 @@ class DashboardHTTPTests(unittest.TestCase):
         with urlopen(self.url + path + "?" + urlencode(params), timeout=5) as response:
             return json.load(response)
 
+    def test_live_reporting_floor_applies_to_history_positions_and_curves(self):
+        start = NOW.replace(hour=16, minute=0, second=0) - timedelta(days=2)
+        self.app.report_starts["live"] = start
+        self.source.rows = [
+            dict(activity(1, start - timedelta(seconds=1)), position_id="excluded"),
+            activity(2, start),
+            dict(activity(3, NOW), position_id="missing-basis", kind="sell"),
+        ]
+        self.app.poll("live", NOW)
+        snap = self.get("/snapshot")["data"]
+        self.assertEqual([r["id"] for r in snap["today_activity"]], ["3"])
+        self.assertEqual([p["id"] for p in snap["open_positions"]], ["pos"])
+        for view in ("open", "history"):
+            self.assertEqual([p["id"] for p in self.get("/positions", view=view)["data"]["items"]], ["pos"])
+        rows = self.get("/activity", **{"from": stamp(start-timedelta(days=1)), "to": stamp(start+timedelta(days=1))})
+        self.assertEqual([r["id"] for r in rows["data"]["items"]], ["2"])
+        for window in ("7d", "30d", "all"):
+            curve = self.get("/pnl/history", range=window)["data"]
+            self.assertEqual(curve["from"], stamp(start))
+            self.assertEqual(curve["points"][-1]["total"], snap["summary"]["total"])
+
     def test_live_games_have_a_direct_page_and_navigation(self):
         with urlopen(self.url.removesuffix(API) + "/games?env=paper") as response:
             page = response.read().decode()

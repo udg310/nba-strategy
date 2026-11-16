@@ -20,11 +20,13 @@ from dashboard_markets import MarketDirectory
 from dashboard_quotes import QuoteFeed
 from dashboard_service import Dashboard
 from dashboard_sources import Sources
-from dashboard_store import UTC, ResetRequired, VersionStore, encode, instant, stamp
+from dashboard_store import HK, UTC, ResetRequired, VersionStore, encode, instant, stamp
 from executor_lock import account_lock
 
 API = "/api/dashboard/v1"
 STATIC = ROOT / "dashboard"
+# Exclude the first live trading day (November 14) from this account's reports.
+LIVE_REPORT_START = datetime(2026, 11, 15, tzinfo=HK)
 
 
 def number(value, default, maximum):
@@ -121,7 +123,8 @@ class Query:
             rows = [
                 p
                 for p in rows
-                if all(p.get(k) == params[k] for k in ("game_id", "channel") if k in params)
+                if p.get("listed", True)
+                and all(p.get(k) == params[k] for k in ("game_id", "channel") if k in params)
             ]
             sort = params.get(
                 "sort",
@@ -332,7 +335,8 @@ def run(args):
         )
         stores[env] = VersionStore(args.cache, scope, env)
     app = Dashboard(sources, stores, QuoteFeed(not args.no_quotes), GamesFeed(),
-                    MarketDirectory() if not args.no_quotes else None)
+                    MarketDirectory() if not args.no_quotes else None,
+                    report_starts={"live": LIVE_REPORT_START})
     try:
         with WebServer((args.host, args.port), app) as server:
             app.start()

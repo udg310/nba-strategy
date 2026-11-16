@@ -38,7 +38,7 @@ const label = key => Object.hasOwn(labels, key) ? labels[key] : key || '—';
 const matchTitle = row => row.game_label && row.game_label !== row.game_id && !/^\d+$/.test(row.game_label) ? row.game_label : '对阵信息暂缺';
 const marketSide = row => [row.market, row.outcome].filter(v => v && !/^\d+$/.test(v)).join(' · ') || '方向暂缺';
 function positionState(p) {
-  if (p.state === 'pending_settlement' && p.quote?.status === 'resolved') return '兑付待确认';
+  if (p.state === 'pending_settlement' && p.quote?.status === 'resolved') return '市场已定兑付价';
   if (p.state !== 'review') return label(p.state);
   const cause = p.issues?.find(i => ['shared_exit','balance_adjustment','balance_disappeared','missing_cost','unattributed','source_gap','missing_fee'].includes(i.code));
   return cause ? label(cause.code) : '缺成交记录';
@@ -86,7 +86,10 @@ const price = value => formatAmount(value, {precise:true});
 const profit = value => formatAmount(value, {signed:true});
 const color = value => !validNumber(value) || Number(value) === 0 ? '' : value.startsWith('-') ? 'negative' : 'positive';
 const sideText = value => color(value) === 'positive' ? '盈利' : color(value) === 'negative' ? '亏损' : validNumber(value) ? '持平' : '';
-const metricValue = m => ['verified','estimated','marked'].includes(m?.status) && validNumber(m.value) ? m.value : null;
+function metricValue(m) {
+  if (m?.status === 'partial' && validNumber(m.known_subtotal)) return m.known_subtotal;
+  return ['verified','estimated','marked'].includes(m?.status) && validNumber(m.value) ? m.value : null;
+}
 const reasonList = issues => (issues || []).map(issue => label(issue.code)).filter((v, i, a) => a.indexOf(v) === i).join('、');
 function quoteExpired(p) {
   const quantity = p?.shared_exit?.quantity ?? p?.quantity;
@@ -102,6 +105,9 @@ function adjusted(m, stale) {
   return {...m, value:null, known_subtotal:null, covered_count:null, status:'partial', issues:[...(m.issues || []), {code:'stale_quote'}]};
 }
 function stalePositions() { return [...positionMap.values()].filter(quoteExpired); }
+function expiredHiddenGames() {
+  return Object.entries(snap?.hidden_quote_deadlines || {}).filter(([,until]) => now() >= epoch(until)).map(([gid]) => gid);
+}
 function quotePrice(position, side) {
   const q = position.quote;
   if (quoteExpired(position) || q?.status === 'stale') return '报价过期';
@@ -115,7 +121,7 @@ function gamesStatus() {
 }
 function summaryMetric(key) {
   if (dayPending && key === 'today') return null;
-  return adjusted(snap?.summary?.[key], key !== 'realized' && stalePositions().length > 0);
+  return adjusted(snap?.summary?.[key], key !== 'realized' && (stalePositions().length > 0 || expiredHiddenGames().length > 0));
 }
 function sourceState() {
   const trade = (snap?.sources || []).filter(s => s.name !== 'quotes' && s.name !== 'scoreboard');
@@ -141,7 +147,7 @@ function renderStatus() {
   $('sourceBanner').hidden = !snap || !status;
   const reasons = (snap?.sources || []).filter(s => !['quotes','scoreboard'].includes(s.name) && !['unconfigured','ok'].includes(s.status)).map(s => s.reason).filter(Boolean);
   $('sourceBanner').textContent = status ? [status,...new Set(reasons),asOf && '数据截至 ' + stamp(asOf)].filter(Boolean).join(' · ') : '';
-  $('footerMeta').textContent = ['覆盖起点 ' + stamp(snap?.coverage_from), currency(), '香港时间 UTC+8'].filter(Boolean).join(' · ');
+  $('footerMeta').textContent = ['统计起点 ' + stamp(snap?.report_from || snap?.coverage_from), currency(), '香港时间 UTC+8'].filter(Boolean).join(' · ');
 }
 function setLinks() {
   for (const [id, path] of [['navHome','/'],['navGames','/games'],['navPositions','/positions'],['navHistory','/activity'],['allPositions','/positions'],['historyLink','/activity']]) $(id).href = urlFor(path);
@@ -262,7 +268,7 @@ function applyChange(change) {
   }
   for (const id of p.activity_remove || []) activity.delete(id);
   const next = {...snap, business_date:date};
-  for (const key of ['summary','sources','live_games','games_source','coverage_from','account_label','currency']) if (key in p) next[key] = p[key];
+  for (const key of ['summary','sources','live_games','games_source','coverage_from','report_from','hidden_quote_deadlines','account_label','currency']) if (key in p) next[key] = p[key];
   positionMap = positions; todayMap = activity; snap = next;
   asOf = change.published_at; version = change.version;
   dayPending = date < dayKey(now());
@@ -364,7 +370,7 @@ function expirySignature() {
   const ids = stalePositions().map(p => p.id);
   if (pageData?.position && quoteExpired(pageData.position)) ids.push('detail');
   for (const p of positionsPage ? pageData?.items || [] : []) if (quoteExpired(p)) ids.push('list-' + p.id);
-  return JSON.stringify([ids,gamesStatus()]);
+  return JSON.stringify([ids,expiredHiddenGames(),gamesStatus()]);
 }
 function checkTime() {
   renderStatus();
@@ -384,16 +390,13 @@ function metricText(m) {
   const value = metricValue(m);
   if (value !== null) return (m.includes_estimated_fee ? '≈ ' : '') + profit(value);
   if (!m) return '—';
-  if (m.status === 'partial' && validNumber(m.known_subtotal)) return '部分可算';
   const code = ['shared_exit','balance_disappeared','balance_adjustment','no_day_baseline','missing_cost','unattributed','stale_quote','no_bid','no_quote','missing_fee','source_gap'].find(k => m.issues?.some(i => i.code === k));
   return code ? label(code) : '暂无法计算';
 }
 const coverage = m => m?.covered_count != null && m?.total_count != null ? `覆盖 ${m.covered_count}/${m.total_count} 仓` : '';
 function metricNote(m) {
   if (!m) return snap ? '等待数据' : '正在读取…';
-  const sub = validNumber(m.known_subtotal) ? '可计算部分 ' + profit(m.known_subtotal) : '';
-  const reasons = reasonList(m.issues);
-  return [sub, m.includes_estimated_fee && m.status !== 'estimated' && '含估算手续费', coverage(m), reasons].filter(Boolean).join(' · ') || '按账户交易范围统计';
+  return [m.includes_estimated_fee && m.status !== 'estimated' && '含估算手续费', coverage(m)].filter(Boolean).join(' · ') || '按账户交易范围统计';
 }
 function renderCards() {
   $('metrics').innerHTML = Object.entries(metrics).map(([k,name]) => {
@@ -401,8 +404,8 @@ function renderCards() {
     const tag = value === null ? '' : sideText(value);
     return `<button class="metric ${k === 'today' ? 'primary' : ''}" data-metric="${k}">
       <span class="cardtop"><span class="metricIcon" aria-hidden="true">${symbols[k]}</span>${name}${tag ? '<span class="quality">' + esc(tag) + '</span>' : ''}</span>
-      <b class="metricValue ${value === null ? 'word' : 'num'}">${esc(dayPending && k === 'today' ? '正在同步' : metricText(m))}</b>
-      <span class="cardbottom"><span class="cardnote">${value !== null ? esc(label(m.status)) + '<br>' : ''}${esc(metricNote(m))}</span><span aria-hidden="true">↗</span></span></button>`;
+      <b class="metricValue ${value === null ? 'word' : 'num'}">${esc(dayPending && k === 'today' ? '正在同步' : value === null ? '—' : metricText(m))}</b>
+      <span class="cardbottom"><span class="cardnote">${value !== null ? esc(m.status === 'partial' ? '可计算小计' : label(m.status)) + '<br>' : ''}${esc(metricNote(m))}</span><span aria-hidden="true">↗</span></span></button>`;
   }).join('');
 }
 function renderGames() {
@@ -414,17 +417,16 @@ function renderGames() {
     $('games').innerHTML = `<p class="empty">${esc(!snap ? '正在读取赛程…' : status === 'ok' ? '目前没有进行中的比赛' : '暂无法确认进行中的比赛')}</p>`;
     return;
   }
-  const staleGames = new Set(stalePositions().map(p => p.game_id));
+  const staleGames = new Set([...expiredHiddenGames(), ...stalePositions().map(p => p.game_id)]);
   $('games').innerHTML = '<div class="gameGrid">' + games.map(g => {
       const m = k => adjusted(g[k], k !== 'realized' && staleGames.has(g.game_id));
       const total = m('total'), value = metricValue(total);
       const matchup = matchTitle(g);
-      const subtotal = value === null && validNumber(total?.known_subtotal);
-      const shown = subtotal ? (total.includes_estimated_fee ? '≈ ' : '') + profit(total.known_subtotal) : metricText(total);
+      const subtotal = total?.status === 'partial' && value !== null;
       const detail = [!g.trade_count && '暂无交易记录', value === null && reasonList(total?.issues)].filter(Boolean).join(' · ');
       const component = (name, metric) => `<div><span>${name}</span><b class="num ${color(metricValue(metric))}">${esc(metricText(metric))}</b></div>`;
       return `<article class="gameCard"><h3>${esc(matchup)}</h3>
-        <div class="gameProfit"><span>${subtotal ? '本场盈亏 · 可计算部分' : '本场盈亏'}</span><b class="${value === null && !subtotal ? 'unknownProfit' : 'num ' + color(value ?? total.known_subtotal)}">${esc(shown)}</b></div>
+        <div class="gameProfit"><span>${subtotal ? '本场盈亏 · 可计算部分' : '本场盈亏'}</span><b class="${value === null ? 'unknownProfit' : 'num ' + color(value)}">${esc(metricText(total))}</b></div>
         <div class="gameComponents">${component('已实现',m('realized'))}${component('未实现',m('unrealized'))}</div>
         ${detail ? '<p class="gameIssue">' + esc(detail) + '</p>' : ''}</article>`;
     }).join('') + '</div>';
@@ -434,13 +436,14 @@ function renderOpen() {
     const va = metricValue(adjusted(a.unrealized,quoteExpired(a))), vb = metricValue(adjusted(b.unrealized,quoteExpired(b)));
     return (va === null) - (vb === null) || Math.abs(Number(vb)) - Math.abs(Number(va)) || a.id.localeCompare(b.id);
   });
-  $('posCount').textContent = !snap || (!all.length && sourceState()) ? '—' : all.length;
+  const emptyReason = !snap || (!snap.summary?.total?.total_count && sourceState()) ? sourceState() : '';
+  $('posCount').textContent = emptyReason ? '—' : all.length;
   $('positions').innerHTML = all.map(p => {
     const m = adjusted(p.unrealized,quoteExpired(p)), val = metricValue(m);
     return `<a href="${esc(detailURL(p.id))}" class="position"><span class="identity"><span class="team">${esc(p.channel ?? '—')}</span>
     <span class="teamtext"><strong>${esc(matchTitle(p))}</strong><span class="sub">${esc(marketSide(p))} · ${esc(positionState(p))}</span></span></span>
     <span class="positionVal"><b class="num ${color(val)}">${esc(metricText(m))}</b><span class="sub">${p.shared_exit ? esc('两通道合计 ' + metricText(adjusted(p.shared_exit.total,quoteExpired(p)))) : esc(qty(p.quantity) + ' 份 · ' + valuationPrice(p))}</span></span></a>`;
-  }).join('') || `<p class="empty">${esc(!snap ? '正在读取持仓…' : sourceState() || '当前暂无持仓')}</p>`;
+  }).join('') || `<p class="empty">${esc(emptyReason || '当前暂无可展示的持仓')}</p>`;
   $('posFoot').textContent = '未实现盈亏 · 按买一或市场已定兑付价估值' + (currency() ? ' / ' + currency() : '');
 }
 function fee(a) {
@@ -509,12 +512,12 @@ function renderDialog() {
     title = '数据来源';
     const srcs = [...(snap?.sources || [])];
     if (snap?.games_source) srcs.push(snap.games_source);
-    body = grid([['环境',env === 'live' ? '实盘' : '模拟盘'],['账户',snap?.account_label],['覆盖起点',stamp(snap?.coverage_from)],['可用现金',price(snap?.summary?.available_cash)],['数据版本',version]]) +
+    body = grid([['环境',env === 'live' ? '实盘' : '模拟盘'],['账户',snap?.account_label],['统计起点',stamp(snap?.report_from || snap?.coverage_from)],['可用现金',price(snap?.summary?.available_cash)],['数据版本',version]]) +
       srcs.map(s => `<section class="event"><h3>${esc(label(s.name))} · ${esc(label(s.status))}</h3>${grid([['最近成功读取',stamp(s.last_success_at)],['最近业务更新',stamp(s.last_event_at)]])}<p class="subtle">${esc(s.reason || '')}</p></section>`).join('');
   } else if (type === 'metric') {
     title = metrics[id]; const m = summaryMetric(id);
-    body = grid([['盈亏',metricText(m)],['数据质量',label(m?.status)],['可计算小计',profit(m?.known_subtotal)],['覆盖仓位',coverage(m) || '—'],
-      ['已实现盈亏',metricText(summaryMetric('realized'))],['未实现盈亏',metricText(summaryMetric('unrealized'))],['估值时间',stamp(snap?.summary?.valued_at)],['覆盖起点',stamp(snap?.coverage_from)]]) +
+    body = grid([[m?.status === 'partial' ? '可计算小计' : '盈亏',metricText(m)],['覆盖仓位',coverage(m) || '—'],
+      ['已实现盈亏',metricText(summaryMetric('realized'))],['未实现盈亏',metricText(summaryMetric('unrealized'))],['估值时间',stamp(snap?.summary?.valued_at)],['统计起点',stamp(snap?.report_from || snap?.coverage_from)]]) +
       issues(m?.issues) + `<a class="linkBtn" href="${esc(urlFor('/positions',{view:'history'}))}">逐仓核对 →</a>`;
   } else {
     const a = home ? todayMap.get(id) : pageData?.items?.find(row => row.id === id);
@@ -550,8 +553,8 @@ function drawChart() {
   ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
   const items = chartData?.points || [];
   const first = items.find(p => metricValue(p.total) !== null);
-  $('chartFoot').textContent = first ? '首个可用点 ' + stamp(first.at) + ' · 香港时间' : '';
-  $('chartEmpty').textContent = first ? '' : chartError || (chartData ? '暂无可核实的历史盈亏' : '正在读取走势…');
+  $('chartFoot').textContent = first ? '首个可用点 ' + stamp(first.at) + ' · 香港时间' + (items.some(p => p.total?.status === 'partial' && metricValue(p.total) !== null) ? ' · 部分时点为可计算小计' : '') : '';
+  $('chartEmpty').textContent = first ? '' : chartError || (chartData ? '暂无可计算的历史盈亏' : '正在读取走势…');
   $('tip').hidden = true; plotted = [];
   const left = 60, right = w-12, top = 16, bottom = h-24;
   ctx.font = '10px Consolas, monospace'; ctx.lineWidth = 1;
@@ -563,7 +566,7 @@ function drawChart() {
   if (!first) return;
   let lo = Infinity, hi = -Infinity;
   for (const p of items) if (metricValue(p.total) !== null) {
-    const value = Number(p.total.value); lo = Math.min(lo,value); hi = Math.max(hi,value);
+    const value = Number(metricValue(p.total)); lo = Math.min(lo,value); hi = Math.max(hi,value);
   }
   const pad = Math.max((hi-lo)*0.1,Math.abs(hi)*.001,.01);
   lo -= pad; hi += pad;
@@ -701,7 +704,8 @@ function renderPage() {
   more.hidden = !pageData?.next_cursor; more.disabled = !!pageBusy;
   if (!pageData) { target.innerHTML = `<div class="empty">${esc(pageError || '正在读取仓位…')}</div>`; return; }
   if (positionsPage) {
-    target.innerHTML = pageData.items.length ? positionTable(pageData.items) : `<div class="empty">${esc(sourceState() || '该范围暂无仓位')}</div>`;
+    const empty = (!snap?.summary?.total?.total_count && sourceState()) || '该范围暂无可展示的仓位';
+    target.innerHTML = pageData.items.length ? positionTable(pageData.items) : `<div class="empty">${esc(empty)}</div>`;
     return;
   }
   const p = pageData.position, stale = quoteExpired(p), q = p.quote || {};

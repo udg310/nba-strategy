@@ -133,7 +133,7 @@ def valuation(raw, books, asset, when):
     return _quote(books.get(asset, {}), when)
 
 
-def _trade_rows(raw, cutoff, exclusive=False):
+def _latest_trades(raw):
     by_id = {}
     for row in raw.get("activity", ()):
         # A correction may move the business date across the cutoff. Resolve
@@ -144,9 +144,35 @@ def _trade_rows(raw, cutoff, exclusive=False):
         ):
             continue
         by_id[row["id"]] = row
+    return by_id.values()
+
+
+def reporting_period(raw, start):
+    """Keep in-period records and the cost history needed by continuing positions."""
+    latest = list(_latest_trades(raw))
+    activity = [r for r in latest if _time(r["time"]) >= start]
+    retained_ids = {r["id"] for r in activity}
+    timeline = {}
+    for pid, events in raw["timeline"].items():
+        retained = [e for e in events if _time(e["time"]) >= start
+                    and (not e.get("activity") or e["activity"]["id"] in retained_ids)]
+        if retained:
+            timeline[pid] = retained
+    members = set(timeline) | {r["position_id"] for r in activity if r.get("position_id")}
+    earlier = [r for r in latest if r.get("position_id") in members and _time(r["time"]) < start]
+    coverage = raw.get("coverage_from")
+    if coverage and len(coverage) == 10:
+        coverage = _stamp(datetime.fromisoformat(coverage).replace(tzinfo=HK))
+    return dict(raw, activity=activity, timeline=timeline, report_from=_stamp(start),
+                coverage_from=_stamp(max(start, _time(coverage))) if coverage else None,
+                meta={p: m for p, m in raw["meta"].items() if p in members},
+                opening_trades=dict(_group(_trade_rows({"activity": earlier}, start))))
+
+
+def _trade_rows(raw, cutoff, exclusive=False):
     rows = []
     within_timestamp = defaultdict(int)
-    for source in by_id.values():
+    for source in _latest_trades(raw):
         when = _time(source["time"])
         if when > cutoff or (exclusive and when == cutoff):
             continue
@@ -257,8 +283,11 @@ def _group(rows):
     return grouped
 
 
-def _balance(pid, rows, detail=None):
+def _balance(pid, rows, detail=None, prior=()):
     holding = Holding(pid)
+    for row in prior:
+        holding.apply(row)
+    holding.realized = Value()
     for row in rows:
         gain = holding.apply(row)
         if detail is not None:
@@ -270,12 +299,14 @@ def _balance(pid, rows, detail=None):
     return holding
 
 
-def _before_fees(pid, trades, quote, gap):
+def _before_fees(pid, trades, quote, gap, prior=()):
     """A separate estimate for incomplete fees, never aggregated into net P&L."""
-    if gap or not any(t.get("fee") is None for t in trades):
+    if gap or not any(t.get("fee") is None for t in (*prior, *trades)):
         return None
     estimate = Holding(pid)
-    for t in trades:
+    for index, t in enumerate((*prior, *trades)):
+        if index == len(prior):
+            estimate.realized = Value()
         gross = _num(t.get("gross"))
         if gross is None or t.get("fee_unit") == "shares":
             return None
@@ -289,6 +320,8 @@ def _before_fees(pid, trades, quote, gap):
                 issues=[i for i in t["issues"] if i["code"] != "missing_fee"],
             )
         )
+    if not trades:
+        estimate.realized = Value()
     if estimate.gaps:
         return None
     realized, unrealized, total, _ = estimate.measures(quote, [])
@@ -307,11 +340,14 @@ def baselines(raw, quotes_at_midnight, midnight):
     position state, or a quote first observed after the boundary.
     """
     result = {}
-    for pid, rows in _group(_trade_rows(raw, midnight, exclusive=True)).items():
-        holding = _balance(pid, rows)
-        quote = valuation(raw, quotes_at_midnight, rows[-1].get("asset_id"), midnight)
+    prior = raw.get("opening_trades", {})
+    grouped = _group(_trade_rows(raw, midnight, exclusive=True))
+    for pid in set(prior) | set(grouped):
+        rows, earlier = grouped.get(pid, []), prior.get(pid, [])
+        holding = _balance(pid, rows, prior=earlier)
+        quote = valuation(raw, quotes_at_midnight, (rows or earlier)[-1].get("asset_id"), midnight)
         total = holding.measures(quote, [])[2]
-        if not raw.get("known_origin") and not rows[0].get("opens_position"):
+        if not raw.get("known_origin") and not (earlier or rows)[0].get("opens_position"):
             total = Value(None, _issues(total.issues, [_issue("no_day_baseline", pid)]))
         result[pid] = _metric([total])
     return result
@@ -414,6 +450,8 @@ def reconciled_channels(raw, grouped, now):
     for (gid, side), pids in candidates.items():
         if not gid or not side or len(pids) != 2:
             continue
+        if any(pid in raw.get("opening_trades", {}) for pid in pids):
+            continue
         rows = [r for pid in pids for r in grouped[pid]]
         assets = {r["asset_id"] for r in rows if r.get("asset_id")}
         if (len(assets) > 1 or len({r.get("channel") for r in rows}) != 2
@@ -503,7 +541,8 @@ def project(raw, quotes, now, baseline=None):
             for key in IDENTITY:
                 if row.get(key) is not None:
                     identity[key] = row[key]
-        holding = _balance(pid, trades, detail)
+        prior = raw.get("opening_trades", {}).get(pid, [])
+        holding = _balance(pid, trades, detail, prior)
         quote = valuation(raw, quotes, identity["asset_id"], now)
         gap = _issues(flags.get("issues", []))
         if pid in checked:
@@ -516,7 +555,7 @@ def project(raw, quotes, now, baseline=None):
         qty = None if unsure else holding.quantity
         had_trade_today = bool(trades and _time(trades[-1]["time"]) >= midnight)
         active_today = bool(had_trade_today or qty or unsure)
-        has_exposure = bool(trades or unsure)
+        has_exposure = bool(trades or prior or unsure)
         if not active_today:
             today = Value()
         elif pid in opening:
@@ -547,6 +586,7 @@ def project(raw, quotes, now, baseline=None):
             last_activity_at=trades[-1]["time"] if trades else None,
             issues=quality,
             state=state,
+            listed=state not in ("review", "pending_settlement"),
             quantity=_decimal(qty),
             reserved_quantity=flags.get("reserved_quantity"),
             avg_entry_price=(
@@ -559,7 +599,7 @@ def project(raw, quotes, now, baseline=None):
             ),
             remaining_cost=_decimal(holding.cost.amount) if not unsure else None,
             shared_exit=joint.get(pid),
-            before_fees=_before_fees(pid, trades, quote, gap),
+            before_fees=_before_fees(pid, trades, quote, gap, prior),
             market_value=_decimal(market),
             quote=quote,
             active_today=active_today,
@@ -599,11 +639,22 @@ def project(raw, quotes, now, baseline=None):
     pooled = [joint[members[0]] for members in shared]
     include_joint_members(summary["total"], pooled)
     include_joint_members(summary["today"], (g for g in pooled if g["opened_today"]))
+    listed = [p for p in open_positions if p["listed"]]
+    hidden_quote_deadlines = {}
+    for p in open_positions:
+        if p["listed"] or p["quote"]["status"] != "fresh":
+            continue
+        quantity = (p["shared_exit"] or p)["quantity"]
+        if (_num(quantity) or ZERO) > 0:
+            gid = p["game_id"] or ""
+            expiry = p["quote"]["valid_until"]
+            if gid not in hidden_quote_deadlines or _time(expiry) < _time(hidden_quote_deadlines[gid]):
+                hidden_quote_deadlines[gid] = expiry
     summary.update(
         available_cash=raw.get("available_cash"),
         day_start_at=_stamp(midnight),
         valued_at=min(marked_times, key=_time) if marked_times else None,
-        open_count=len(open_positions),
+        open_count=len(listed),
         review_count=sum(p["has_exposure"] and p["state"] == "review" for p in positions)
         + sum(not r.get("position_id") for r in rows),
     )
@@ -613,13 +664,16 @@ def project(raw, quotes, now, baseline=None):
         "timezone": "Asia/Hong_Kong",
         "business_date": midnight.date().isoformat(),
         "coverage_from": raw.get("coverage_from"),
+        "report_from": raw.get("report_from"),
         "summary": summary,
         "sources": raw.get("sources", []),
-        "open_positions": open_positions,
+        "open_positions": listed,
+        "hidden_quote_deadlines": hidden_quote_deadlines,
         "today_activity": today_rows,
     }
     return {
         "snapshot": snapshot,
+        "valuation_positions": open_positions,
         "positions": positions,
         "activity": rows,
         "timeline": _timeline(raw, grouped, now, detail),

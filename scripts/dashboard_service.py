@@ -7,14 +7,15 @@ import time
 from datetime import datetime, timedelta
 
 from dashboard_games import team_name
-from dashboard_model import baselines, game_results, project
+from dashboard_model import baselines, game_results, project, reporting_period
 from dashboard_store import HK, UTC, instant, stamp
 
 
 class Dashboard:
-    def __init__(self, sources, stores, quotes, games, markets=None):
+    def __init__(self, sources, stores, quotes, games, markets=None, report_starts=None):
         self.sources, self.stores, self.quotes, self.games = sources, stores, quotes, games
         self.markets = markets
+        self.report_starts = report_starts or {}
         self.stop_event = threading.Event()
         self.thread = None
         self.previous_inputs = {}
@@ -25,6 +26,8 @@ class Dashboard:
 
     def poll(self, env, now=None):
         raw = self.sources[env].read()
+        if env in self.report_starts:
+            raw = reporting_period(raw, self.report_starts[env])
         # Take the time after reading the feeds so their newest observations are eligible.
         quotes, quote_source = self.quotes.read(env)
         fixtures, games_source = self.games.read()
@@ -130,18 +133,20 @@ class Dashboard:
             dict(game, **summaries.get(game["game_id"], summaries[None])) for game in fixtures
         ]
         snap["games_source"] = games_source
-        self.quotes.watch(env, [p.get("asset_id") for p in snap["open_positions"] if p["quote"]["status"] != "resolved"])
+        self.quotes.watch(env, [p.get("asset_id") for p in view["valuation_positions"] if p["quote"]["status"] != "resolved"])
         prior = self.last_quotes.get(env, {})
         changes = {k: v for k, v in quotes.items() if prior.get(k) != v}
         origin = {
             k: raw.get(k) for k in ("known_origin", "coverage_from", "account_label", "currency", "payouts", "markets")
         }
+        if raw.get("report_from"):
+            origin.update(report_from=raw["report_from"], opening_trades=raw["opening_trades"])
         store.publish(view, origin, changes, now)
         self.previous_inputs[env] = inputs
         self.last_quotes[env] = quotes
         deadlines = [
             instant(p["quote"]["valid_until"])
-            for p in snap["open_positions"]
+            for p in view["valuation_positions"]
             if p["quote"].get("valid_until") and p["quote"]["status"] == "fresh"
         ]
         # A source clock can be slightly ahead of the collector; reconsider future rows at their timestamp.
@@ -193,6 +198,11 @@ class Dashboard:
             )
         else:
             start = midnight - timedelta(days={"today": 0, "7d": 6, "30d": 29}[window])
+        if snapshot.get("report_from"):
+            floor = instant(snapshot["report_from"])
+            start = max(start, floor)
+            if window == "all" and not snapshot.get("coverage_from"):
+                start = floor
         cache_key = (env, window, version)
         with self.cache_lock:
             if cache_key in self.curves:

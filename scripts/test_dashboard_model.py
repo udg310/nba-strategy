@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
-from dashboard_model import baselines, game_results, project
+from dashboard_model import baselines, game_results, project, reporting_period
 
 
 MIDNIGHT = datetime(2026, 11, 15, 16, tzinfo=timezone.utc)
@@ -68,6 +68,24 @@ def quote(bid, at=NOW, source=None):
 
 
 class ProjectionTests(unittest.TestCase):
+    def test_reporting_period_keeps_only_the_cost_basis_of_an_earlier_trade(self):
+        earlier = MIDNIGHT - timedelta(seconds=5)
+        data = book(event("old", "buy", "10", "4", "0", earlier, "old"),
+                    event("carry", "buy", "10", "4", "0", earlier),
+                    event("old-sale", "sell", "2", "2", "0", earlier + timedelta(seconds=1)),
+                    event("new-sale", "sell", "4", "3", "0", MIDNIGHT),
+                    meta={"old": {"pending_settlement": True}})
+        data = reporting_period(data, MIDNIGHT)
+        opening = baselines(data, {"P": quote(".5", MIDNIGHT)}, MIDNIGHT)
+        view = project(data, {"P": quote(".5")}, NOW, opening)
+        self.assertEqual([a["id"] for a in view["activity"]], ["new-sale"])
+        self.assertEqual(set(view["timeline"]), {"P"})
+        self.assertEqual([e["activity"]["id"] for e in view["timeline"]["P"]], ["new-sale"])
+        (p,) = view["positions"]
+        self.assertEqual((p["quantity"], p["remaining_cost"]), ("4", "1.6"))
+        self.assertEqual([p[k]["value"] for k in ("realized", "unrealized", "total", "today")],
+                         ["1.4", "0.4", "1.8", "1"])
+
     def test_replaying_projected_activity_preserves_order_with_equal_timestamps(self):
         trades = [event("a", "buy", "10", "4", "0"), event("z", "sell", "8", "6", "0")]
         data = book(*trades)
@@ -84,7 +102,10 @@ class ProjectionTests(unittest.TestCase):
     def test_examples_and_pending_settlement(self):
         data = book(self.sell, self.buy, meta={"P": {"pending_settlement": True}})
         report = project(data, {"P": quote(".5")}, NOW)
-        (p,) = report["snapshot"]["open_positions"]
+        self.assertEqual(report["snapshot"]["open_positions"], [])
+        self.assertEqual(report["snapshot"]["summary"]["open_count"], 0)
+        self.assertIn("G", report["snapshot"]["hidden_quote_deadlines"])
+        (p,) = report["positions"]
         self.assertEqual(
             (p["quantity"], p["remaining_cost"], p["state"]), ("6", "2.46", "pending_settlement")
         )

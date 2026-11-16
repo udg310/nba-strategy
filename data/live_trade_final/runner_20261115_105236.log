@@ -1,0 +1,2 @@
+{"ev": "ledger", "db": "/Users/udg/Documents/nba_strategy/var/live_runner/attempts.db", "recovered": 0, "t": 1794739956.6021829}
+{"ev": "start", "live": true, "balance": 79.510483, "stake_frac": 0.05, "stake_now": {"A": 3.98, "C": 3.98, "D": 7.95}, "max_open": 5, "outdir": "/Users/udg/Documents/nba_strategy/data/live_trade_final/2026-11-15/105236", "t": 1794739957.511123}

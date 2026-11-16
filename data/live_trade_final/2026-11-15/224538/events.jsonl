@@ -1,0 +1,228 @@
+{"ev": "ledger", "db": "/opt/nba-strategy/var/live_runner/attempts.db", "recovered": 0, "t": 1794782738.2550418}
+{"ev": "start", "live": true, "balance": 69.795543, "stake_frac": 0.05, "stake_now": {"A": 3.49, "C": 3.49, "D": 6.98}, "max_open": 5, "outdir": "/opt/nba-strategy/data/live_trade_final/2026-11-15/224538", "t": 1794782740.1642053}
+{"ev": "trader_start", "gid": "401909986", "fav": "Lakers", "pre": 0.605, "open0": 0, "t": 1794782742.3168025}
+{"ev": "resume_position", "gid": "401909987", "ch": "C", "outcome": "Hornets", "entry": 0.5, "size": 7.36, "held": 7.36, "recorded": 7.36, "el_in": 561.0, "attempt_id": null, "position_id": null, "t": 1794782744.5569873}
+{"ev": "trader_start", "gid": "401909987", "fav": "Clippers", "pre": 0.515, "open0": 1, "t": 1794782744.5574422}
+{"ev": "trader_start", "gid": "401909988", "fav": "Spurs", "pre": 0.895, "open0": 0, "t": 1794782745.952045}
+{"ev": "heartbeat", "balance": 69.8, "open": 1, "traders": 3, "positions": [["401909987", "C", "Hornets", 0.5, 7.36]], "confirmed": {"buy": false, "sell": false}, "t": 1794783047.2422993}
+{"ev": "heartbeat", "balance": null, "open": 1, "traders": 3, "positions": [["401909987", "C", "Hornets", 0.5, 7.36]], "confirmed": {"buy": false, "sell": false}, "t": 1794783351.7013943}
+{"ev": "signal", "gid": "401909988", "ch": "C", "outcome": "Jazz", "ask": 0.16, "usd": 3.49, "el": 1208.0, "m": -1, "ask_notional": 465.15, "asks": [[0.16, 2907.21], [0.17, 8858.22], [0.18, 14977.64], [0.19, 22116.89], [0.2, 111117.25]], "t": 1794783484.7106764}
+{"ev": "buy_posted", "gid": "401909988", "ch": "C", "ask": 0.16, "limit": 0.19, "order_id": "0x93fe1b55bfcfcc60f8fc89c121a76985a471a9d13c5586af2822a6b57c29ae62", "usd": 3.49, "t": 1794783486.622034}
+{"ev": "buy", "gid": "401909988", "ch": "C", "outcome": "Jazz", "filled_shares": 21.8125, "entry": 0.16, "usd": 3.49, "tries": 1, "order_id": "0x93fe1b55bfcfcc60f8fc89c121a76985a471a9d13c5586af2822a6b57c29ae62", "fills": 1, "attempt_id": "8175321A3707483798B23CBA279C5BC9", "position_id": "8175321A3707483798B23CBA279C5BC9", "el_in": 1208.0, "t": 1794783495.4817078}
+{"ev": "CONFIRMED_BUY", "gid": "401909988", "ch": "C", "shares": 21.8125, "entry": 0.16, "t": 1794783495.4818833}
+{"ev": "heartbeat", "balance": 66.16, "open": 2, "traders": 3, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 21.8125]], "confirmed": {"buy": true, "sell": false}, "t": 1794783656.1046824}
+{"ev": "heartbeat", "balance": 66.16, "open": 2, "traders": 3, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 21.8125]], "confirmed": {"buy": true, "sell": false}, "t": 1794783960.8563914}
+{"ev": "exit", "gid": "401909987", "ch": "C", "reason": "target", "bid": 0.74, "entry": 0.5, "size": 7.36, "t": 1794784065.1348662}
+{"ev": "heartbeat", "balance": 66.16, "open": 2, "traders": 3, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 21.8125]], "confirmed": {"buy": true, "sell": false}, "t": 1794784264.880045}
+{"ev": "trader_start", "gid": "401909989", "fav": "Celtics", "pre": 0.875, "open0": 0, "t": 1794784278.834224}
+{"ev": "trader_start", "gid": "401909990", "fav": "Knicks", "pre": 0.605, "open0": 0, "t": 1794784368.5464575}
+{"ev": "signal", "gid": "401909990", "ch": "C", "outcome": "Raptors", "ask": 0.45, "usd": 3.31, "el": 138.0, "m": -5, "ask_notional": 32.74, "asks": [[0.45, 72.76], [0.46, 2681.37], [0.47, 2080.86], [0.48, 17205.92], [0.49, 29579.0]], "t": 1794784531.221044}
+{"ev": "buy_posted", "gid": "401909990", "ch": "C", "ask": 0.45, "limit": 0.48, "order_id": "0xde68c02ced2070b6c5712b346b5ec51c66accb23db0c80338a630f7d7b1f64f3", "usd": 3.31, "t": 1794784533.2218893}
+{"ev": "buy", "gid": "401909990", "ch": "C", "outcome": "Raptors", "filled_shares": 7.308479, "entry": 0.45, "usd": 3.29, "tries": 1, "order_id": "0xde68c02ced2070b6c5712b346b5ec51c66accb23db0c80338a630f7d7b1f64f3", "fills": 1, "attempt_id": "389C95AD19D14BA687890A377F5A4B0D", "position_id": "389C95AD19D14BA687890A377F5A4B0D", "el_in": 138.0, "t": 1794784542.2653322}
+{"ev": "heartbeat", "balance": 62.76, "open": 3, "traders": 5, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 21.8125], ["401909990", "C", "Raptors", 0.45, 7.308479]], "confirmed": {"buy": true, "sell": false}, "t": 1794784572.1697993}
+{"ev": "signal", "gid": "401909990", "ch": "A", "outcome": "Raptors", "ask": 0.49, "usd": 3.14, "el": 224.0, "m": -6, "ask_notional": 5978.29, "asks": [[0.49, 12200.59], [0.5, 7391.11], [0.51, 1228.0], [0.52, 11279.51], [0.53, 23560.0]], "t": 1794784641.9222786}
+{"ev": "buy_posted", "gid": "401909990", "ch": "A", "ask": 0.49, "limit": 0.52, "order_id": "0x8d5e25c5ea93756c0c815becc52c2a6ea9ef665356e42460b766e4e1cc629360", "usd": 3.14, "t": 1794784642.9305}
+{"ev": "reconcile_add", "gid": "401909990", "ch": "C", "outcome": "Raptors", "held": 13.716643, "accounted": 7.308479, "extra": 6.408164, "size": 13.716643, "t": 1794784644.5490875}
+{"ev": "buy", "gid": "401909990", "ch": "A", "outcome": "Raptors", "filled_shares": 6.408164, "entry": 0.49, "usd": 3.14, "tries": 1, "order_id": "0x8d5e25c5ea93756c0c815becc52c2a6ea9ef665356e42460b766e4e1cc629360", "fills": 1, "attempt_id": "698C65ACE4284CF8BBB328DFEAD7C043", "position_id": "698C65ACE4284CF8BBB328DFEAD7C043", "el_in": 224.0, "t": 1794784651.7160218}
+{"ev": "signal_skip_band", "gid": "401909988", "ch": "A", "ask": 0.09, "el": 1515.0, "m": -7, "t": 1794784821.490075}
+{"ev": "signal", "gid": "401909988", "ch": "A", "outcome": "Jazz", "ask": 0.1, "usd": 2.98, "el": 1515.0, "m": -7, "ask_notional": 8.1, "asks": [[0.1, 81.0], [0.11, 3347.34], [0.12, 2797.5], [0.13, 1645.31], [0.14, 26024.55]], "t": 1794784863.035713}
+{"ev": "buy_posted", "gid": "401909988", "ch": "A", "ask": 0.1, "limit": 0.13, "order_id": "0x6456f4b8d6db59046413d7fa5fcdc3ce3cfef3885dfe36d8a7e9e3c4438d3381", "usd": 2.98, "t": 1794784863.6670108}
+{"ev": "reconcile_add", "gid": "401909988", "ch": "C", "outcome": "Jazz", "held": 51.6125, "accounted": 21.8125, "extra": 29.8, "size": 51.6125, "t": 1794784865.8413365}
+{"ev": "buy", "gid": "401909988", "ch": "A", "outcome": "Jazz", "filled_shares": 29.8, "entry": 0.1, "usd": 2.98, "tries": 1, "order_id": "0x6456f4b8d6db59046413d7fa5fcdc3ce3cfef3885dfe36d8a7e9e3c4438d3381", "fills": 1, "attempt_id": "F1F431A880F24CF1A118241B0B9E49F6", "position_id": "F1F431A880F24CF1A118241B0B9E49F6", "el_in": 1515.0, "t": 1794784870.7253456}
+{"ev": "heartbeat", "balance": 56.42, "open": 5, "traders": 5, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 51.6125], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909988", "A", "Jazz", 0.1, 29.8]], "confirmed": {"buy": true, "sell": false}, "t": 1794784876.3995595}
+{"ev": "sell_gave_up", "gid": "401909987", "ch": "C", "outcome": "Hornets", "reason": "target", "remaining": 7.36, "last": "no fill after 30s", "t": 1794784968.4448197}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.961, "el": 2578.0, "m": 9, "t": 1794784970.9712179}
+{"ev": "heartbeat", "balance": 56.42, "open": 5, "traders": 5, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 51.6125], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909988", "A", "Jazz", 0.1, 29.8]], "confirmed": {"buy": true, "sell": false}, "t": 1794785180.3358226}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.909, "el": 2578.0, "m": 9, "t": 1794785332.6009278}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.979, "el": 2578.0, "m": 9, "t": 1794785362.855639}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.95, "el": 2578.0, "m": 9, "t": 1794785393.20256}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.949, "el": 2578.0, "m": 9, "t": 1794785402.333379}
+{"ev": "heartbeat", "balance": 56.42, "open": 5, "traders": 5, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 51.6125], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909988", "A", "Jazz", 0.1, 29.8]], "confirmed": {"buy": true, "sell": false}, "t": 1794785484.26183}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.938, "el": 2578.0, "m": 9, "t": 1794785545.4955647}
+{"ev": "exit", "gid": "401909987", "ch": "C", "reason": "time", "bid": 0.35, "entry": 0.5, "size": 7.36, "t": 1794785655.1914442}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.97, "el": 2578.0, "m": 9, "t": 1794785745.7338402}
+{"ev": "heartbeat", "balance": 56.42, "open": 5, "traders": 5, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 51.6125], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909988", "A", "Jazz", 0.1, 29.8]], "confirmed": {"buy": true, "sell": false}, "t": 1794785789.007811}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.961, "el": 2578.0, "m": 9, "t": 1794785825.943605}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.993, "el": 2578.0, "m": 9, "t": 1794786038.5917833}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.995, "el": 2578.0, "m": 9, "t": 1794786047.663073}
+{"ev": "heartbeat", "balance": 56.42, "open": 5, "traders": 5, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 51.6125], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909988", "A", "Jazz", 0.1, 29.8]], "confirmed": {"buy": true, "sell": false}, "t": 1794786093.263328}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.99, "el": 2578.0, "m": 9, "t": 1794786108.8171031}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.989, "el": 2578.0, "m": 9, "t": 1794786126.995986}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.977, "el": 2578.0, "m": 9, "t": 1794786160.2994716}
+{"ev": "signal_skip_band", "gid": "401909986", "ch": "D", "ask": 0.996, "el": 2578.0, "m": 9, "t": 1794786208.9428508}
+{"ev": "no_ask", "gid": "401909986", "ch": "D", "t": 1794786269.716505}
+{"ev": "no_ask", "gid": "401909986", "ch": "D", "t": 1794786287.7199104}
+{"ev": "trader_stop", "gid": "401909986", "open": 0, "t": 1794786318.0996745}
+{"ev": "trader_released", "gid": "401909986", "remaining": 4, "t": 1794786318.0999088}
+{"ev": "heartbeat", "balance": 56.42, "open": 5, "traders": 4, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 51.6125], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909988", "A", "Jazz", 0.1, 29.8]], "confirmed": {"buy": true, "sell": false}, "t": 1794786397.9829984}
+{"ev": "sell_gave_up", "gid": "401909987", "ch": "C", "outcome": "Hornets", "reason": "time", "remaining": 7.36, "last": "invalid tick size (0.001), minimum for the market is 0.01", "t": 1794786555.8399842}
+{"ev": "exit", "gid": "401909987", "ch": "C", "reason": "time", "bid": 0.003, "entry": 0.5, "size": 7.36, "t": 1794786556.5109687}
+{"ev": "exit", "gid": "401909988", "ch": "A", "reason": "target", "bid": 0.34, "entry": 0.1, "size": 29.8, "t": 1794786585.9098263}
+{"ev": "sell", "gid": "401909988", "ch": "A", "outcome": "Jazz", "reason": "target", "sold_shares": 29.8, "exit": 0.35, "remaining": 0.0, "fills": 1, "t": 1794786595.6934156}
+{"ev": "CONFIRMED_SELL", "gid": "401909988", "ch": "A", "sold_shares": 29.8, "exit": 0.35, "t": 1794786595.6935742}
+{"ev": "heartbeat", "balance": 66.52, "open": 4, "traders": 4, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 51.6125], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164]], "confirmed": {"buy": true, "sell": true}, "t": 1794786702.681099}
+{"ev": "exit", "gid": "401909988", "ch": "C", "reason": "target", "bid": 0.4, "entry": 0.16, "size": 51.6125, "t": 1794786746.0341492}
+{"ev": "sell", "gid": "401909988", "ch": "C", "outcome": "Jazz", "reason": "target", "sold_shares": 21.81, "exit": 0.4, "remaining": 29.8025, "fills": 1, "t": 1794786758.9291854}
+{"ev": "heartbeat", "balance": 74.98, "open": 4, "traders": 4, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 29.8025], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164]], "confirmed": {"buy": true, "sell": true}, "t": 1794787008.5349557}
+{"ev": "heartbeat", "balance": 74.98, "open": 4, "traders": 4, "positions": [["401909987", "C", "Hornets", 0.5, 7.36], ["401909988", "C", "Jazz", 0.16, 29.8025], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164]], "confirmed": {"buy": true, "sell": true}, "t": 1794787342.9308078}
+{"ev": "sell_gave_up", "gid": "401909987", "ch": "C", "outcome": "Hornets", "reason": "time", "remaining": 7.36, "last": "no_bid", "t": 1794787457.4535396}
+{"ev": "no_exit", "gid": "401909987", "ch": "C", "outcome": "Hornets", "size": 7.36, "note": "final, no bid", "t": 1794787458.0395312}
+{"ev": "trader_stop", "gid": "401909987", "open": 0, "t": 1794787459.5836706}
+{"ev": "trader_released", "gid": "401909987", "remaining": 3, "t": 1794787459.583907}
+{"ev": "sell_gave_up", "gid": "401909988", "ch": "C", "outcome": "Jazz", "reason": "target", "remaining": 29.8025, "last": "qty 0.0 bal 0.0025", "t": 1794787648.0073547}
+{"ev": "exit", "gid": "401909988", "ch": "C", "reason": "force", "bid": 0.37, "entry": 0.16, "size": 29.8025, "t": 1794787651.6963592}
+{"ev": "heartbeat", "balance": 74.98, "open": 3, "traders": 3, "positions": [["401909988", "C", "Jazz", 0.16, 29.8025], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164]], "confirmed": {"buy": true, "sell": true}, "t": 1794787657.0312765}
+{"ev": "trader_start", "gid": "401909991", "fav": "Rockets", "pre": 0.755, "open0": 0, "t": 1794787893.6937377}
+{"ev": "heartbeat", "balance": null, "open": 3, "traders": 4, "positions": [["401909988", "C", "Jazz", 0.16, 29.8025], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164]], "confirmed": {"buy": true, "sell": true}, "t": 1794787963.9318147}
+{"ev": "signal", "gid": "401909991", "ch": "C", "outcome": "Wizards", "ask": 0.27, "usd": 3.75, "el": 206.0, "m": -2, "ask_notional": 13.5, "asks": [[0.27, 50.0], [0.28, 1443.03], [0.29, 2379.0], [0.3, 4270.0], [0.31, 2677.14]], "t": 1794788154.0653849}
+{"ev": "buy_posted", "gid": "401909991", "ch": "C", "ask": 0.27, "limit": 0.3, "order_id": "0x640dc1e535935219f64cd5d4774e1d8530d737858c4fe1e832e887dbad6bfff7", "usd": 3.75, "t": 1794788155.4787464}
+{"ev": "buy", "gid": "401909991", "ch": "C", "outcome": "Wizards", "filled_shares": 13.888889, "entry": 0.27, "usd": 3.75, "tries": 1, "order_id": "0x640dc1e535935219f64cd5d4774e1d8530d737858c4fe1e832e887dbad6bfff7", "fills": 1, "attempt_id": "8F731D4487824AE79DDE8156E0A2FC1F", "position_id": "8F731D4487824AE79DDE8156E0A2FC1F", "el_in": 206.0, "t": 1794788164.8007727}
+{"ev": "heartbeat", "balance": 71.09, "open": 4, "traders": 4, "positions": [["401909988", "C", "Jazz", 0.16, 29.8025], ["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794788267.6824486}
+{"ev": "sell_gave_up", "gid": "401909988", "ch": "C", "outcome": "Jazz", "reason": "force", "remaining": 29.8025, "last": "qty 0.0 bal 0.0025", "t": 1794788552.629439}
+{"ev": "reconcile_closed", "gid": "401909988", "ch": "C", "outcome": "Jazz", "why": "balance gone", "held": 0.0025, "size": 29.8025, "t": 1794788553.0333614}
+{"ev": "trader_stop", "gid": "401909988", "open": 0, "t": 1794788553.4004602}
+{"ev": "trader_released", "gid": "401909988", "remaining": 3, "t": 1794788553.4006937}
+{"ev": "heartbeat", "balance": 71.09, "open": 3, "traders": 3, "positions": [["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794788578.3482637}
+{"ev": "heartbeat", "balance": 71.09, "open": 3, "traders": 3, "positions": [["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794788882.3480833}
+{"ev": "heartbeat", "balance": 71.09, "open": 3, "traders": 3, "positions": [["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794789187.356123}
+{"ev": "heartbeat", "balance": 71.09, "open": 3, "traders": 3, "positions": [["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794789491.9176202}
+{"ev": "heartbeat", "balance": 71.09, "open": 3, "traders": 3, "positions": [["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794789796.4338646}
+{"ev": "heartbeat", "balance": 71.09, "open": 3, "traders": 3, "positions": [["401909990", "C", "Raptors", 0.45, 13.716643], ["401909990", "A", "Raptors", 0.49, 6.408164], ["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794790100.4190106}
+{"ev": "exit", "gid": "401909990", "ch": "C", "reason": "time", "bid": 0.57, "entry": 0.45, "size": 13.716643, "t": 1794790223.0255642}
+{"ev": "sell", "gid": "401909990", "ch": "C", "outcome": "Raptors", "reason": "time", "sold_shares": 13.71, "exit": 0.57, "remaining": 0.006643, "fills": 1, "t": 1794790233.2676837}
+{"ev": "reconcile_closed", "gid": "401909990", "ch": "A", "outcome": "Raptors", "why": "balance gone", "held": 0.006643, "size": 6.408164, "t": 1794790253.5010877}
+{"ev": "heartbeat", "balance": 78.74, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794790405.7606142}
+{"ev": "heartbeat", "balance": 78.74, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794790710.5340934}
+{"ev": "heartbeat", "balance": 78.74, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794791015.6134727}
+{"ev": "trader_stop", "gid": "401909989", "open": 0, "t": 1794791310.9093323}
+{"ev": "trader_released", "gid": "401909989", "remaining": 2, "t": 1794791310.9095907}
+{"ev": "heartbeat", "balance": 78.74, "open": 1, "traders": 2, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794791320.807188}
+{"ev": "trader_start", "gid": "401909992", "fav": "Hawks", "pre": 0.755, "open0": 0, "t": 1794791442.5326157}
+{"ev": "heartbeat", "balance": 78.74, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794791628.9526484}
+{"ev": "signal", "gid": "401909992", "ch": "C", "outcome": "Bucks", "ask": 0.31, "usd": 3.94, "el": 207.0, "m": -4, "ask_notional": 614.27, "asks": [[0.31, 1981.51], [0.32, 3215.0], [0.33, 2752.5], [0.34, 2874.99], [0.35, 21885.0]], "t": 1794791716.002004}
+{"ev": "buy_posted", "gid": "401909992", "ch": "C", "ask": 0.31, "limit": 0.34, "order_id": "0xe5cf306241566054b8d3483ab98fec94d8d8522f6d427801ace742f09ce7a2b2", "usd": 3.94, "t": 1794791717.4944932}
+{"ev": "buy", "gid": "401909992", "ch": "C", "outcome": "Bucks", "filled_shares": 12.709678, "entry": 0.31, "usd": 3.94, "tries": 1, "order_id": "0xe5cf306241566054b8d3483ab98fec94d8d8522f6d427801ace742f09ce7a2b2", "fills": 1, "attempt_id": "55CCE73828ED4969A2F1F1D2866EF809", "position_id": "55CCE73828ED4969A2F1F1D2866EF809", "el_in": 207.0, "t": 1794791726.7271302}
+{"ev": "heartbeat", "balance": 74.66, "open": 2, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889], ["401909992", "C", "Bucks", 0.31, 12.709678]], "confirmed": {"buy": true, "sell": true}, "t": 1794791933.7385623}
+{"ev": "signal", "gid": "401909992", "ch": "A", "outcome": "Bucks", "ask": 0.4, "usd": 3.73, "el": 348.0, "m": -9, "ask_notional": 459.2, "asks": [[0.4, 1148.01], [0.41, 5148.08], [0.42, 6910.0], [0.43, 20740.0], [0.44, 922.5]], "t": 1794791944.442212}
+{"ev": "buy_posted", "gid": "401909992", "ch": "A", "ask": 0.4, "limit": 0.43, "order_id": "0xc51094ad7149baed162a40f40bda2558cbcd08c0c08ad2c82fff0bae6cfa466c", "usd": 3.73, "t": 1794791945.136474}
+{"ev": "reconcile_add", "gid": "401909992", "ch": "C", "outcome": "Bucks", "held": 22.034678, "accounted": 12.709678, "extra": 9.325, "size": 22.034678, "t": 1794791949.9587433}
+{"ev": "buy", "gid": "401909992", "ch": "A", "outcome": "Bucks", "filled_shares": 9.325, "entry": 0.4, "usd": 3.73, "tries": 1, "order_id": "0xc51094ad7149baed162a40f40bda2558cbcd08c0c08ad2c82fff0bae6cfa466c", "fills": 1, "attempt_id": "43D3CA05F5BD469789B1F7D7916AD24F", "position_id": "43D3CA05F5BD469789B1F7D7916AD24F", "el_in": 348.0, "t": 1794791955.399707}
+{"ev": "heartbeat", "balance": 70.82, "open": 3, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889], ["401909992", "C", "Bucks", 0.31, 22.034678], ["401909992", "A", "Bucks", 0.4, 9.325]], "confirmed": {"buy": true, "sell": true}, "t": 1794792240.0612807}
+{"ev": "heartbeat", "balance": 70.82, "open": 3, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889], ["401909992", "C", "Bucks", 0.31, 22.034678], ["401909992", "A", "Bucks", 0.4, 9.325]], "confirmed": {"buy": true, "sell": true}, "t": 1794792544.6626146}
+{"ev": "exit", "gid": "401909992", "ch": "C", "reason": "target", "bid": 0.55, "entry": 0.31, "size": 22.034678, "t": 1794792700.6218386}
+{"ev": "sell", "gid": "401909992", "ch": "C", "outcome": "Bucks", "reason": "target", "sold_shares": 22.03, "exit": 0.56, "remaining": 0.004678, "fills": 1, "t": 1794792709.3825388}
+{"ev": "reconcile_closed", "gid": "401909992", "ch": "A", "outcome": "Bucks", "why": "balance gone", "held": 0.004678, "size": 9.325, "t": 1794792731.0312939}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794792849.3136609}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794793153.7313027}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794793458.8955326}
+{"ev": "exit", "gid": "401909991", "ch": "C", "reason": "time", "bid": 0.001, "entry": 0.27, "size": 13.888889, "t": 1794793721.9584048}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794793764.304994}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794794069.739994}
+{"ev": "trader_stop", "gid": "401909990", "open": 0, "t": 1794794356.112411}
+{"ev": "trader_released", "gid": "401909990", "remaining": 2, "t": 1794794356.1126482}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 2, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794794374.6905127}
+{"ev": "sell_gave_up", "gid": "401909991", "ch": "C", "outcome": "Wizards", "reason": "time", "remaining": 13.888889, "last": "invalid tick size (0.001), minimum for the market is 0.01", "t": 1794794626.3188019}
+{"ev": "exit", "gid": "401909991", "ch": "C", "reason": "time", "bid": 0.001, "entry": 0.27, "size": 13.888889, "t": 1794794626.910915}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 2, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794794679.7686408}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 2, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794794984.37167}
+{"ev": "trader_start", "gid": "401909993", "fav": "Thunder", "pre": 0.845, "open0": 0, "t": 1794795033.195467}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794795292.3385906}
+{"ev": "sell_gave_up", "gid": "401909991", "ch": "C", "outcome": "Wizards", "reason": "time", "remaining": 13.888889, "last": "no_bid", "t": 1794795530.9020915}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794795597.5070703}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794795902.6516788}
+{"ev": "heartbeat", "balance": 82.88, "open": 1, "traders": 3, "positions": [["401909991", "C", "Wizards", 0.27, 13.888889]], "confirmed": {"buy": true, "sell": true}, "t": 1794796208.1037707}
+{"ev": "no_exit", "gid": "401909991", "ch": "C", "outcome": "Wizards", "size": 13.888889, "note": "final, no bid", "t": 1794796308.8863604}
+{"ev": "trader_stop", "gid": "401909991", "open": 0, "t": 1794796311.9218366}
+{"ev": "trader_released", "gid": "401909991", "remaining": 2, "t": 1794796311.9220827}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.89, "el": 1814.0, "m": 7, "t": 1794796418.9767282}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.9, "el": 1814.0, "m": 7, "t": 1794796428.1032126}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.9, "el": 1814.0, "m": 7, "t": 1794796449.3304179}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.94, "el": 1814.0, "m": 7, "t": 1794796479.7309096}
+{"ev": "heartbeat", "balance": 82.88, "open": 0, "traders": 2, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794796513.2264214}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.93, "el": 1814.0, "m": 7, "t": 1794796519.7105243}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.93, "el": 1814.0, "m": 7, "t": 1794796550.0474076}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.89, "el": 1814.0, "m": 7, "t": 1794796580.3108246}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.9, "el": 1814.0, "m": 7, "t": 1794796638.0674043}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.9, "el": 1814.0, "m": 7, "t": 1794796781.0265481}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.89, "el": 1814.0, "m": 7, "t": 1794796799.088127}
+{"ev": "heartbeat", "balance": 82.88, "open": 0, "traders": 2, "positions": [], "confirmed": {"buy": true, "sell": true}, "t": 1794796817.839676}
+{"ev": "signal_skip_band", "gid": "401909992", "ch": "D", "ask": 0.8, "el": 1814.0, "m": 7, "t": 1794796839.6186676}
+{"ev": "signal", "gid": "401909992", "ch": "D", "outcome": "Hawks", "ask": 0.78, "usd": 8.29, "el": 1814.0, "m": 7, "ask_notional": 394.27, "asks": [[0.78, 505.47], [0.79, 6174.58], [0.8, 28149.42], [0.81, 1297.32], [0.82, 16395.32]], "t": 1794796853.3242278}
+{"ev": "buy_posted", "gid": "401909992", "ch": "D", "ask": 0.78, "limit": 0.81, "order_id": "0x30c0550987060820de3b2967f9303305ebab1a5c4a12c158d09222450f01ae0a", "usd": 8.29, "t": 1794796853.9735842}
+{"ev": "buy", "gid": "401909992", "ch": "D", "outcome": "Hawks", "filled_shares": 10.615381, "entry": 0.7800000000000001, "usd": 8.28, "tries": 1, "order_id": "0x30c0550987060820de3b2967f9303305ebab1a5c4a12c158d09222450f01ae0a", "fills": 1, "attempt_id": "67B3BA40B0D14950A8FC021FDBFF039E", "position_id": "67B3BA40B0D14950A8FC021FDBFF039E", "el_in": 1814.0, "t": 1794796860.8217525}
+{"ev": "heartbeat", "balance": 74.51, "open": 1, "traders": 2, "positions": [["401909992", "D", "Hawks", 0.7800000000000001, 10.615381]], "confirmed": {"buy": true, "sell": true}, "t": 1794797122.2587643}
+{"ev": "signal", "gid": "401909993", "ch": "C", "outcome": "Kings", "ask": 0.25, "usd": 3.73, "el": 949.0, "m": -2, "ask_notional": 3321.3, "asks": [[0.25, 13285.18], [0.26, 15140.34], [0.27, 10875.0], [0.28, 2110.0], [0.29, 34725.0]], "t": 1794797175.4661913}
+{"ev": "buy_posted", "gid": "401909993", "ch": "C", "ask": 0.25, "limit": 0.28, "order_id": "0x2732bd4f2d4f41e90918a132a205d5c863d81614893048a3bddf32fe1a08b7a8", "usd": 3.73, "t": 1794797176.8754027}
+{"ev": "buy", "gid": "401909993", "ch": "C", "outcome": "Kings", "filled_shares": 14.92, "entry": 0.25, "usd": 3.73, "tries": 1, "order_id": "0x2732bd4f2d4f41e90918a132a205d5c863d81614893048a3bddf32fe1a08b7a8", "fills": 1, "attempt_id": "EE586D2C179D45289D0B82799BD70E7F", "position_id": "EE586D2C179D45289D0B82799BD70E7F", "el_in": 949.0, "t": 1794797183.340816}
+{"ev": "heartbeat", "balance": 70.64, "open": 2, "traders": 2, "positions": [["401909992", "D", "Hawks", 0.7800000000000001, 10.615381], ["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794797426.5438886}
+{"ev": "heartbeat", "balance": 70.64, "open": 2, "traders": 2, "positions": [["401909992", "D", "Hawks", 0.7800000000000001, 10.615381], ["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794797730.8315864}
+{"ev": "heartbeat", "balance": 70.64, "open": 2, "traders": 2, "positions": [["401909992", "D", "Hawks", 0.7800000000000001, 10.615381], ["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794798035.3025467}
+{"ev": "heartbeat", "balance": 70.64, "open": 2, "traders": 2, "positions": [["401909992", "D", "Hawks", 0.7800000000000001, 10.615381], ["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794798340.0489433}
+{"ev": "heartbeat", "balance": 70.64, "open": 2, "traders": 2, "positions": [["401909992", "D", "Hawks", 0.7800000000000001, 10.615381], ["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794798645.0603855}
+{"ev": "heartbeat", "balance": 70.64, "open": 2, "traders": 2, "positions": [["401909992", "D", "Hawks", 0.7800000000000001, 10.615381], ["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794798949.3923347}
+{"ev": "heartbeat", "balance": null, "open": 2, "traders": 2, "positions": [["401909992", "D", "Hawks", 0.7800000000000001, 10.615381], ["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794799254.0001833}
+{"ev": "heartbeat", "balance": 70.64, "open": 2, "traders": 2, "positions": [["401909992", "D", "Hawks", 0.7800000000000001, 10.615381], ["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794799558.4330063}
+{"ev": "settle_hold", "gid": "401909992", "ch": "D", "outcome": "Hawks", "entry": 0.7800000000000001, "size": 10.615381, "note": "held to resolution", "t": 1794799567.525668}
+{"ev": "trader_stop", "gid": "401909992", "open": 0, "t": 1794799567.8257647}
+{"ev": "trader_released", "gid": "401909992", "remaining": 1, "t": 1794799567.8260024}
+{"ev": "heartbeat", "balance": 70.64, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794799863.359052}
+{"ev": "heartbeat", "balance": 70.64, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794800167.572796}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.93, "el": 1875.0, "m": 9, "t": 1794800399.6113083}
+{"ev": "heartbeat", "balance": 70.64, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794800473.5094597}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.94, "el": 1875.0, "m": 9, "t": 1794800501.2202573}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.959, "el": 1875.0, "m": 9, "t": 1794800522.5224068}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.968, "el": 1875.0, "m": 9, "t": 1794800592.281482}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.976, "el": 1875.0, "m": 9, "t": 1794800610.6033797}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.97, "el": 1875.0, "m": 9, "t": 1794800692.548197}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.975, "el": 1875.0, "m": 9, "t": 1794800701.7701337}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.966, "el": 1875.0, "m": 9, "t": 1794800723.042029}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.959, "el": 1875.0, "m": 9, "t": 1794800771.5667708}
+{"ev": "heartbeat", "balance": 81.26, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794800777.8501012}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.968, "el": 1875.0, "m": 9, "t": 1794800793.4481068}
+{"ev": "heartbeat", "balance": 81.26, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794801083.0324733}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.965, "el": 1875.0, "m": 9, "t": 1794801134.9970462}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.975, "el": 1875.0, "m": 9, "t": 1794801156.2694294}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.989, "el": 1875.0, "m": 9, "t": 1794801195.6909113}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.995, "el": 1875.0, "m": 9, "t": 1794801305.0420241}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.995, "el": 1875.0, "m": 9, "t": 1794801335.3550236}
+{"ev": "heartbeat", "balance": 81.26, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794801387.8522959}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.998, "el": 1875.0, "m": 9, "t": 1794801415.5999122}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.999, "el": 1875.0, "m": 9, "t": 1794801446.043758}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794801515.9123802}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.999, "el": 1875.0, "m": 9, "t": 1794801556.2621896}
+{"ev": "signal_skip_band", "gid": "401909993", "ch": "D", "ask": 0.999, "el": 1875.0, "m": 9, "t": 1794801586.7488866}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794801637.9991417}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794801656.1847715}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794801686.6581752}
+{"ev": "heartbeat", "balance": 81.26, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794801693.1277215}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794801748.21204}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794801766.5060036}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794801787.7274399}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794801808.9941545}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794801997.7639437}
+{"ev": "heartbeat", "balance": 81.26, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794801997.9665484}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802037.829516}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802049.929809}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802068.2835777}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802089.6574814}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802120.052588}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802150.5808277}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802180.9244}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802199.1632273}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802220.7906635}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802248.5942705}
+{"ev": "heartbeat", "balance": 81.26, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794802303.6951797}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802572.3224638}
+{"ev": "heartbeat", "balance": 81.26, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794802609.52863}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802633.9988039}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802703.9468217}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802762.0020626}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802783.3069048}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802892.7630434}
+{"ev": "no_ask", "gid": "401909993", "ch": "D", "t": 1794802913.9912784}
+{"ev": "heartbeat", "balance": 81.26, "open": 1, "traders": 1, "positions": [["401909993", "C", "Kings", 0.25, 14.92]], "confirmed": {"buy": true, "sell": true}, "t": 1794802914.4020464}
+{"ev": "no_exit", "gid": "401909993", "ch": "C", "outcome": "Kings", "size": 14.92, "note": "final, no bid", "t": 1794802994.2854533}
+{"ev": "trader_stop", "gid": "401909993", "open": 0, "t": 1794802997.3553803}
+{"ev": "trader_released", "gid": "401909993", "remaining": 0, "t": 1794802997.3556125}
+{"ev": "day_over", "games": 9, "t": 1794802997.3557324}
+{"ev": "stopped", "open": 0, "balance": 81.259397, "traders": 0, "confirmed_buy": true, "confirmed_sell": true, "t": 1794802997.77233}

@@ -1,0 +1,6 @@
+{"ev": "ledger", "db": "/opt/nba-strategy/var/live_runner/attempts.db", "recovered": 0, "t": 1794781811.0414934}
+{"ev": "start", "live": true, "balance": 69.795543, "stake_frac": 0.05, "stake_now": {"A": 3.49, "C": 3.49, "D": 6.98}, "max_open": 5, "outdir": "/opt/nba-strategy/data/live_trade_final/2026-11-15/223011", "t": 1794781812.6940925}
+{"ev": "trader_start", "gid": "401909986", "fav": "Lakers", "pre": 0.605, "open0": 0, "t": 1794781814.1371272}
+{"ev": "resume_position", "gid": "401909987", "ch": "C", "outcome": "Hornets", "entry": 0.5, "size": 7.36, "held": 7.36, "recorded": 7.36, "el_in": 561.0, "attempt_id": null, "position_id": null, "t": 1794781816.4778056}
+{"ev": "trader_start", "gid": "401909987", "fav": "Clippers", "pre": 0.515, "open0": 1, "t": 1794781816.4781935}
+{"ev": "trader_start", "gid": "401909988", "fav": "Spurs", "pre": 0.895, "open0": 0, "t": 1794781818.3311126}

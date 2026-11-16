@@ -51,7 +51,24 @@ sudo systemctl stop nba-live.service      # stop
 sudo systemctl disable --now nba-live.timer  # stop the daily schedule
 ```
 
-## 8. Safety
+## 8. Disable automatic updates
+
+A trading host must not upgrade `systemd`/`udev`/`libc` mid-session. On
+2026-11-16 `unattended-upgrades` upgraded 200+ packages at 06:29, restarted
+`networkd`/`cloudmonitor`, and crashed the runner into a restart loop
+06:30–06:45. Disable it and hold the restart-prone packages:
+
+```sh
+sudo systemctl disable --now unattended-upgrades
+sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer
+sudo systemctl mask unattended-upgrades
+sudo apt-mark hold systemd udev libc6 libssl3t64
+```
+
+Upgrade manually in an off-hours maintenance window instead (held packages
+show as "held back" until `apt-mark unhold`). Never reboot during a session.
+
+## 9. Safety
 - One runner only; `account_lock` enforces it.
 - Attempt ledger: `/opt/nba-strategy/var/live_runner/attempts.db`.
 - Event logs: `/opt/nba-strategy/data/live_trade_final/<UTC date>/<run>/events.jsonl`.

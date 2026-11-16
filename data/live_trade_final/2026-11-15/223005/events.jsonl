@@ -1,0 +1,3 @@
+{"ev": "ledger", "db": "/opt/nba-strategy/var/live_runner/attempts.db", "recovered": 0, "t": 1794781805.7852821}
+{"ev": "start", "live": true, "balance": 69.795543, "stake_frac": 0.05, "stake_now": {"A": 3.49, "C": 3.49, "D": 6.98}, "max_open": 5, "outdir": "/opt/nba-strategy/data/live_trade_final/2026-11-15/223005", "t": 1794781807.4754899}
+{"ev": "trader_start", "gid": "401909986", "fav": "Lakers", "pre": 0.605, "open0": 0, "t": 1794781809.563078}

@@ -51,6 +51,13 @@ class AttemptLedger:
             updated_at INTEGER NOT NULL,
             UNIQUE(account, game_id, channel, action)
         )""")
+        # The filled size and price belong to THIS attempt's order.  Recording
+        # them is what lets a restart rebuild each channel's exact lot instead
+        # of splitting the token balance between A/C/DL by guesswork.
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(attempts)")}
+        for name, typ in (("filled_shares", "REAL"), ("filled_price", "REAL")):
+            if name not in cols:
+                self.db.execute(f"ALTER TABLE attempts ADD COLUMN {name} {typ}")
         self.db.commit()
         self.recover()
 
@@ -120,13 +127,24 @@ class AttemptLedger:
                 (state, order_id, int(time.time()), attempt_id))
             self.db.commit()
 
-    def fill(self, attempt_id):
+    def fill(self, attempt_id, shares=None, price=None):
         with self.lock:
             self.db.execute(
-                "UPDATE attempts SET state=?, position_id=?, updated_at=? "
+                "UPDATE attempts SET state=?, position_id=?, "
+                "filled_shares=coalesce(?,filled_shares), "
+                "filled_price=coalesce(?,filled_price), updated_at=? "
                 "WHERE attempt_id=?",
-                (FILLED, attempt_id, int(time.time()), attempt_id))
+                (FILLED, attempt_id, shares, price, int(time.time()),
+                 attempt_id))
             self.db.commit()
+
+    def filled_of(self, attempt_id):
+        """(shares, price) recorded for this attempt, or (None, None)."""
+        with self.lock:
+            row = self.db.execute(
+                "SELECT filled_shares, filled_price FROM attempts "
+                "WHERE attempt_id=?", (attempt_id,)).fetchone()
+            return (row["filled_shares"], row["filled_price"]) if row else (None, None)
 
     def close(self, attempt_id):
         with self.lock:

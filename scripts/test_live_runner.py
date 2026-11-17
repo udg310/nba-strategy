@@ -365,6 +365,86 @@ class LiveRunnerFixes(unittest.TestCase):
         pending, _ = self._dl_signal(wall_age=5, enable=False)
         self.assertFalse(pending)
 
+    # ---- per-lot ownership: A/C/DL share one token, lots keep them apart ----
+    def test_lot_arithmetic(self):
+        p = {"size": 10.0, "lots": [{"order_id": "o1", "shares": 6.0, "price": .5},
+                                    {"order_id": "o2", "shares": 4.0, "price": .6}]}
+        self.assertAlmostEqual(lr.lot_shares(p), 10.0)
+        lr.lot_consume(p, 6.5)                     # oldest first
+        self.assertAlmostEqual(lr.lot_shares(p), 3.5)
+        self.assertEqual([l["order_id"] for l in p["lots"]], ["o2"])
+        lr.lot_consume(p, 99.0)
+        self.assertAlmostEqual(lr.lot_shares(p), 0.0)
+        # a position with no lots falls back to its size
+        self.assertAlmostEqual(lr.lot_shares({"size": 3.0}), 3.0)
+
+    def test_sell_posts_our_lot_not_the_shared_balance(self):
+        lr.book = lambda client, tok: (0.55, 0.50, "0.01")
+        lr.market_order = self._order("SELL", fill=-1)
+        lr.token_balance = lambda client, tok: 8.0      # ours 4 + sibling 4
+        t = lr.GameTrader("gl", RES, "HOME", True)
+        sib = {"gid": "gl", "ch": "A", "token": "td", "outcome": "Dog",
+               "entry": 0.40, "size": 4.0, "t_in": time.time(),
+               "el_in": 300.0, "style": "process", "tp": 0.20,
+               "selling": False, "lots": [{"order_id": "oA", "shares": 4.0,
+                                           "price": 0.40}]}
+        p = {"gid": "gl", "ch": "DL", "token": "td", "outcome": "Dog",
+             "entry": 0.55, "size": 4.0, "t_in": time.time(),
+             "el_in": 1300.0, "style": "settle", "tp": None,
+             "selling": True, "exit_reason": "margin_stop",
+             "lots": [{"order_id": "oD", "shares": 4.0, "price": 0.55}]}
+        t.positions.extend([sib, p])
+        t._sell(p)
+        self.assertTrue(self.orders, "the stop must post a sell")
+        self.assertAlmostEqual(self.orders[0][2], 4.0,
+                               msg="must sell our lot, never the shared balance")
+        self.assertAlmostEqual(sib["size"], 4.0, msg="the sibling is untouched")
+
+    def test_excess_is_not_folded_into_a_sibling_channel(self):
+        lr.book = lambda client, tok: (0.60, 0.50, "0.01")
+        lr.token_balance = lambda client, tok: 10.0     # 8 accounted + 2 loose
+        lr.market_order = self._order("SELL", fill=-1)
+        t = lr.GameTrader("gy", RES, "HOME", True)
+        now = time.time()
+        sib = {"gid": "gy", "ch": "A", "token": "td", "outcome": "Dog",
+               "entry": 0.40, "size": 4.0, "t_in": now - 10,
+               "el_in": 300.0, "style": "process", "tp": 0.20,
+               "selling": False, "lots": [{"order_id": "oA", "shares": 4.0,
+                                           "price": 0.40}]}
+        p = {"gid": "gy", "ch": "C", "token": "td", "outcome": "Dog",
+             "entry": 0.40, "size": 4.0, "t_in": now - 10,
+             "el_in": 300.0, "style": "process", "tp": 0.20,
+             "selling": False, "lots": [{"order_id": "oC", "shares": 4.0,
+                                         "price": 0.40}]}
+        t.positions.extend([sib, p])
+        t._manage_exits({"state": "in", "period": 3, "detail": "6:00",
+                         "home_score": 70, "away_score": 72}, now)
+        self.assertFalse(any(r.get("ev") == "reconcile_add" for r in self.logs))
+        self.assertTrue(any(r.get("ev") == "unattributed_excess"
+                            for r in self.logs))
+        self.assertAlmostEqual(p["size"], 4.0)
+        self.assertAlmostEqual(sib["size"], 4.0)
+
+    def test_loose_fill_is_refused_on_a_shared_token(self):
+        # a single unclaimed trade on a token another channel holds is theirs
+        lr.token_balance = lambda client, tok: 8.0
+        t = lr.GameTrader("gf", RES, "HOME", True)
+        sib = {"gid": "gf", "ch": "A", "token": "td", "outcome": "Dog",
+               "entry": 0.40, "size": 4.0, "t_in": time.time(),
+               "el_in": 300.0, "style": "process", "tp": 0.20,
+               "selling": False}
+        t.positions.append(sib)
+        self.fake.trades = [{"id": "tx", "status": "CONFIRMED", "side": "BUY",
+                             "size": "4.0", "price": "0.40",
+                             "match_time": str(int(time.time())),
+                             "taker_order_id": "someone-else"}]
+        self.assertEqual(t._fills("td", "BUY", set(), int(time.time()) - 5,
+                                  "our-order"), [])
+        # with no other holder on the token the fallback still recovers it
+        t.positions = []
+        got = t._fills("td", "BUY", set(), int(time.time()) - 5, "our-order")
+        self.assertEqual(len(got), 1)
+
     # ---- a shared token must not make one channel sell another's shares ----
     def _sweep(self, balance, sibling):
         """Run one sell with a sibling position on the same token; return posts."""

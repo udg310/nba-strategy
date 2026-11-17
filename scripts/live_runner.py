@@ -148,6 +148,44 @@ def _frac_of(ch):
         return DOGLOCK_FRAC
     return STAKE_FRAC * S.CHANNELS[ch]["weight"]
 
+
+# ---- per-lot ownership -----------------------------------------------------
+# A/C/D/DL all buy the DOG token, so the wallet balance says nothing about
+# which channel owns what.  Every position therefore carries the exact lots
+# its own orders produced ({"order_id", "shares", "price"}), and a sell is
+# sized from those lots -- never from the token balance.
+def lot_shares(p):
+    lots = p.get("lots")
+    if lots is None:                 # a resumed/legacy position with no lots
+        return p["size"]
+    return sum(l["shares"] for l in lots)
+
+
+def lot_add(p, order_id, shares, price):
+    p.setdefault("lots", []).append(
+        {"order_id": order_id or "", "shares": shares, "price": price})
+
+
+def lot_consume(p, shares):
+    """Remove `shares` oldest-first.  Returns how much the lots covered."""
+    lots = p.get("lots")
+    if lots is None:
+        return shares
+    left, done = shares, 0.0
+    while left > 1e-9 and lots:
+        take = min(lots[0]["shares"], left)
+        lots[0]["shares"] -= take
+        left -= take
+        done += take
+        if lots[0]["shares"] <= 1e-9:
+            lots.pop(0)
+    return done
+
+
+def lot_owner(p):
+    """The order ids behind a position, for the audit log."""
+    return [l.get("order_id") or "-" for l in p.get("lots") or []]
+
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
 SELL_WINDOW = 900
 REPOST_AFTER = 30        # seconds to wait before re-checking an unfilled sell
@@ -654,9 +692,18 @@ class GameTrader(threading.Thread):
             return out
         # If the response's orderID format ever differs from the trade's
         # taker_order_id, accept a single unambiguous new trade rather than
-        # silently dropping the fill.  Two candidates means A and C are both
-        # in flight; guessing there is worse than waiting.
-        return loose if (order_id and len(loose) == 1) else []
+        # silently dropping the fill -- but only when nothing else on this
+        # token could have produced it.  With A/C/DL all holding the dog, one
+        # unclaimed trade on a shared token is usually the OTHER channel's,
+        # so guessing there is worse than waiting for the record.
+        if not (order_id and len(loose) == 1):
+            return []
+        oid = str(order_id)
+        others = [x for x in self.positions if x["token"] == token]
+        others += [x for x in self.inflight.values()
+                   if x["token"] == token
+                   and str(x.get("order_id") or "") != oid]
+        return loose if not others else []
 
     def _open_position(self, q, key, shares, entry, nfills):
         self.inflight.pop(key, None)
@@ -666,21 +713,23 @@ class GameTrader(threading.Thread):
                "outcome": q["outcome"], "entry": entry, "size": shares,
                "t_in": time.time(), "el_in": q.get("el_sig"),
                "position_id": q.get("attempt_id"),
-               "style": q["style"], "tp": q["tp"], "selling": False}
+               "style": q["style"], "tp": q["tp"], "selling": False,
+               "lots": [{"order_id": q.get("order_id") or "",
+                         "shares": shares, "price": entry}]}
         self.positions.append(pos)
         with LOCK:
             ALL_POSITIONS.append(pos)
             first = not CONFIRMED["buy"]
             CONFIRMED["buy"] = True
         if LEDGER is not None and q.get("attempt_id"):
-            LEDGER.fill(q["attempt_id"])
+            LEDGER.fill(q["attempt_id"], shares, entry)
         log({"ev": "buy", "gid": self.gid, "ch": key, "outcome": q["outcome"],
              "filled_shares": shares, "entry": entry,
              "usd": round(shares * entry, 2), "tries": q["tries"],
              "order_id": q.get("order_id"), "fills": nfills,
              "attempt_id": q.get("attempt_id"),
              "position_id": q.get("attempt_id"),
-             "el_in": q.get("el_sig")})
+             "el_in": q.get("el_sig"), "lots": lot_owner(pos)})
         if first:
             log({"ev": "CONFIRMED_BUY", "gid": self.gid, "ch": key,
                  "shares": shares, "entry": entry})
@@ -708,10 +757,15 @@ class GameTrader(threading.Thread):
             #    showed it, use the balance delta once -- only when no other
             #    position shares this token, so the delta cannot be theirs.
             if now > q["deadline"]:
-                same = [p for p in self.positions if p["token"] == q["token"]]
-                same += [x for k2, x in self.inflight.items()
-                         if k2 != key and x["token"] == q["token"]]
-                bal = token_balance(self.client, q["token"]) if not same else None
+                # Only another POSTED buy on this token can move the balance
+                # behind our back.  Existing positions do not change it (and
+                # sells run on this same thread), so the delta from base_bal
+                # is exactly our fill even when A/C/DL share the token.
+                others_inflight = [x for k2, x in self.inflight.items()
+                                   if k2 != key and x["token"] == q["token"]
+                                   and x.get("posted")]
+                bal = (token_balance(self.client, q["token"])
+                       if not others_inflight else None)
                 if (q.get("posted") and bal is not None
                         and q.get("base_bal") is not None
                         and bal > q["base_bal"] + 1e-9):
@@ -919,12 +973,28 @@ class GameTrader(threading.Thread):
                                for q in self.inflight.values())
             if held is not None and held > ours + DUST and not pending_same:
                 extra = held - ours
-                p["size"] += extra
-                log({"ev": "reconcile_add", "gid": self.gid, "ch": p["ch"],
-                     "outcome": p["outcome"], "held": held,
-                     "accounted": round(ours, 6),
-                     "extra": round(extra, 6),
-                     "size": round(p["size"], 6)})
+                # Shares whose own order record never arrived.  Only fold them
+                # in when this position is the sole holder of the token; with
+                # A/C/DL all on the dog, an unattributed lot is far more
+                # likely to belong to another channel than to this one.
+                siblings = [x for x in self.positions
+                            if x["token"] == p["token"] and x is not p]
+                if siblings:
+                    if not p.get("_excess_logged"):
+                        p["_excess_logged"] = True
+                        log({"ev": "unattributed_excess", "gid": self.gid,
+                             "ch": p["ch"], "held": held,
+                             "accounted": round(ours, 6),
+                             "extra": round(extra, 6),
+                             "holders": [x["ch"] for x in siblings]})
+                else:
+                    p["size"] += extra
+                    lot_add(p, "", extra, p.get("entry") or 0.5)
+                    log({"ev": "reconcile_add", "gid": self.gid, "ch": p["ch"],
+                         "outcome": p["outcome"], "held": held,
+                         "accounted": round(ours, 6),
+                         "extra": round(extra, 6),
+                         "size": round(p["size"], 6)})
             _, bid, _ = book(self.client, p["token"])
             if bid is None and finished:
                 log({"ev": "no_exit", "gid": self.gid, "ch": p["ch"],
@@ -980,13 +1050,15 @@ class GameTrader(threading.Thread):
                         seen.add(t["id"])
                         self.seen_ids.add(t["id"])
                 p["size"] = max(0.0, p["size"] - sold)
+                lot_consume(p, sold)
                 with LOCK:
                     first = not CONFIRMED["sell"]
                     CONFIRMED["sell"] = True
                 log({"ev": "sell", "gid": self.gid, "ch": p["ch"],
                      "outcome": p["outcome"], "reason": p.get("exit_reason"),
                      "sold_shares": sold, "exit": px,
-                     "remaining": round(p["size"], 6), "fills": len(fills)})
+                     "remaining": round(p["size"], 6), "fills": len(fills),
+                     "order_id": order_id, "lots": lot_owner(p)})
                 if first:
                     log({"ev": "CONFIRMED_SELL", "gid": self.gid, "ch": p["ch"],
                          "sold_shares": sold, "exit": px})
@@ -1076,8 +1148,16 @@ class GameTrader(threading.Thread):
 
     def _post_sell(self, p):
         bal = token_balance(self.client, p["token"])
-        qty = math.floor(p["size"] * 100) / 100
+        # Size the sell from OUR lots, never from the wallet balance: the
+        # balance is shared with any other channel holding this token.
+        qty = math.floor(min(lot_shares(p), p["size"]) * 100) / 100
         if bal is not None and bal < qty:
+            # the wallet cannot back our own lot -- either another channel
+            # already sold, or the record is stale.  Never sell more than we
+            # hold, and make it visible.
+            log({"ev": "sell_qty_clamped", "gid": self.gid, "ch": p["ch"],
+                 "own": round(qty, 6), "bal": round(bal, 6),
+                 "lots": lot_owner(p)})
             qty = math.floor(bal * 100) / 100
         if qty <= 0:
             return "rejected", {"err": f"qty {qty} bal {bal}"}
@@ -1367,11 +1447,21 @@ def run(live):
                     remaining = max(0.0, held - ev_sizes)
                     for ch, outcome, entry, size, t_in, el_in, order_id, \
                             attempt_id, position_id in items:
-                        if size <= 0 and remaining > DUST:
+                        need = size
+                        # An attempt with no recorded event size: take the
+                        # size the ledger wrote when it filled, rather than
+                        # handing it whatever balance is left over.
+                        if need <= 0 and attempt_id and LEDGER is not None:
+                            led_shares, led_px = LEDGER.filled_of(attempt_id)
+                            if led_shares and led_shares > DUST:
+                                need = led_shares
+                                if (entry is None or entry <= 0) and led_px:
+                                    entry = led_px
+                        if need <= 0 and remaining > DUST:
                             alloc = remaining
                             remaining = 0.0
                         else:
-                            alloc = size * scale
+                            alloc = (need * scale) if need > 0 else 0.0
                         if alloc < DUST:
                             continue
                         # An attempt without an event has no entry price;
@@ -1393,12 +1483,15 @@ def run(live):
                                "el_in": el_in,
                                "position_id": position_id or attempt_id,
                                "style": channel_spec(ch)["style"],
-                               "tp": channel_spec(ch)["tp"], "selling": False}
+                               "tp": channel_spec(ch)["tp"], "selling": False,
+                               "lots": [{"order_id": order_id or "",
+                                         "shares": alloc,
+                                         "price": entry or 0.5}]}
                         t.positions.append(pos)
                         with LOCK:
                             ALL_POSITIONS.append(pos)
                         if LEDGER is not None and attempt_id:
-                            LEDGER.fill(attempt_id)
+                            LEDGER.fill(attempt_id, alloc, entry or 0.5)
                         resumed.add((g["gid"], ch))
                         log({"ev": "resume_position", "gid": g["gid"], "ch": ch,
                              "outcome": outcome, "entry": pos["entry"],

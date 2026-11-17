@@ -590,9 +590,7 @@ class GameTrader(threading.Thread):
                       else next(o for o in self.res["outcomes"] if o != self.res["fav"]))
             token = self.res["tokens"][self.res["outcomes"].index(outcome)]
             market = self.res.get("market", "")
-            if (row["token"] and row["token"] != token
-                    or row["market"] and row["market"].lower() != market.lower()):
-                raise ValueError("recovered asset differs from original order")
+            LEDGER.bind_asset(self.gid, key, token=token, market=market, outcome=outcome)
             close = closes.get(key)
             if not row["identity_verified"] and close:
                 # Old production overwrote earlier CLOSE attempts. An apparently
@@ -1089,14 +1087,14 @@ class GameTrader(threading.Thread):
         # Size the sell from THIS position, never from the wallet balance:
         # the balance is shared with any other channel holding this token.
         qty = float(Decimal(str(p["size"])).quantize(Decimal("0.01"), rounding=ROUND_FLOOR))
-        if bal is not None and bal < qty:
-            # the wallet cannot back our own position -- either another
-            # channel already sold or the record is stale.  Never sell more
-            # than the wallet holds, and make it visible.
-            log({"ev": "sell_qty_clamped", "gid": self.gid, "ch": p["ch"],
-                 "own": round(qty, 6), "bal": round(bal, 6),
-                 "order_id": p.get("position_id")})
-            qty = float(Decimal(str(bal)).quantize(Decimal("0.01"), rounding=ROUND_FLOOR))
+        if bal is not None:
+            others = LEDGER.other_token_shares(self.gid, p["ch"], p["token"])
+            if bal - others < qty - 1e-9:
+                log({"ev": "sell_short_of_wallet", "gid": self.gid, "ch": p["ch"],
+                     "own": round(qty, 6), "bal": round(bal, 6), "others": round(others, 6),
+                     "position_id": p.get("position_id")})
+                # Keep the exit intent so a delayed balance can recover next tick.
+                return "rejected", {"err": "wallet cannot cover recorded channel holdings"}
         if qty <= 0:
             return "rejected", {"err": f"qty {qty} bal {bal}"}
         _, bid, tick = book(self.client, p["token"])

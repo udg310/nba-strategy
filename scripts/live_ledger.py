@@ -353,6 +353,19 @@ class AttemptLedger:
                 and (not row["market"] or row["market"].lower() == market.lower())
                 and (not row["outcome"] or row["outcome"] == outcome))
 
+    def bind_asset(self, game, channel, *, token, market, outcome):
+        """Complete legacy asset metadata while preserving its order verification state."""
+        key = self.account, game, channel
+        with self._write():
+            rows = self.db.execute("""SELECT * FROM attempts
+                WHERE account=? AND game_id=? AND channel=?""", key).fetchall()
+            if any(not self._matches_asset(row, token, market, outcome) for row in rows):
+                raise ValueError("recovered asset differs from original order")
+            self.db.execute("""UPDATE attempts SET
+                token=coalesce(nullif(token,''),?), market=coalesce(nullif(market,''),?),
+                outcome=coalesce(nullif(outcome,''),?)
+                WHERE account=? AND game_id=? AND channel=?""", (token, market, outcome, *key))
+
     def handoff(self, game, channel, *, token, market, outcome, reason, size=0,
                 entry=0, reserved_usd=0, order_id="", action="HOLD", position_id="",
                 legacy_sold=0, identity_verified=True):
@@ -450,6 +463,24 @@ class AttemptLedger:
             return self.db.execute("""SELECT coalesce(sum(size),0) FROM order_fills
                 WHERE account=? AND game_id=? AND channel=? AND action='CLOSE'""",
                 (self.account, game, channel)).fetchone()[0]
+
+    def other_token_shares(self, game, channel, token):
+        """Reserve the other channels' recorded holdings when checking wallet coverage."""
+        params = self.account, token, game, channel
+        with self.lock:
+            return self.db.execute("""
+                SELECT coalesce(sum(size),0) FROM (
+                    SELECT max(0,coalesce(bought_size,0) - coalesce((
+                        SELECT sum(f.size) FROM order_fills f WHERE f.account=a.account
+                          AND f.game_id=a.game_id AND f.channel=a.channel AND f.action='CLOSE'
+                    ),0)) AS size
+                    FROM attempts a WHERE account=? AND token=? AND (game_id,channel)!=(?,?)
+                      AND action='OPEN' AND state IN ('SUBMITTING','ACCEPTED','UNKNOWN','FILLED','PARTIAL_FINAL')
+                    UNION ALL
+                    SELECT max(size,coalesce(legacy_bought_size,0)-sold_shares,0)
+                    FROM reconcile_tasks WHERE account=? AND token=? AND (game_id,channel)!=(?,?)
+                      AND state!='DONE'
+                )""", params * 2).fetchone()[0]
 
     def close_flat_position(self, game, channel):
         """Caller owns a write transaction. An unfinished BUY can still acquire more."""

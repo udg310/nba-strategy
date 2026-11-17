@@ -402,6 +402,53 @@ ledger.apply_order('game', 'A', 'b', [{'id': 'one', 'size': 2, 'price': .5}], 2)
         self.assertTrue(self.ledger.apply_resolution("game", "A", 1))
         self.assertEqual(self.task()["state"], "REDEEMABLE")
 
+    def test_shared_wallet_reserves_other_channels_once_across_handoff(self):
+        for channel in ("A", "C"):
+            oid = "buy-" + channel
+            aid, _ = self.ledger.begin("game", channel, "OPEN", oid, 1, token="shared",
+                                       market="m", outcome="home", reserved_usd=2)
+            self.ledger.record_buy_fills(oid, [fill("b", 4)])
+            self.ledger.fill(aid, 4, .5)
+        # A different account's holding and another token cannot reserve this wallet.
+        other = AttemptLedger(self.path, "bob")
+        self.addCleanup(other.close_path)
+        other.handoff("elsewhere", "A", token="shared", market="m", outcome="home",
+                       reason="settle_hold", size=20, entry=.5)
+        self.ledger.handoff("game", "D", token="different", market="m", outcome="away",
+                            reason="settle_hold", size=20, entry=.5)
+        self.assertEqual(self.ledger.other_token_shares("game", "A", "shared"), 4)
+        self.handoff("C", size=4, entry=.5)
+        self.assertEqual(self.ledger.other_token_shares("game", "A", "shared"), 4)
+        self.reopen()
+        self.assertEqual(self.ledger.other_token_shares("game", "A", "shared"), 4)
+        self.ledger.apply_resolution("game", "C", 1)
+        self.ledger.confirm_redemption("game", "C", "verified-receipt", 4, 4)
+        self.assertEqual(self.ledger.other_token_shares("game", "A", "shared"), 0)
+
+    def test_unverified_legacy_claim_still_reserves_sibling_wallet_shares(self):
+        aid, _ = self.ledger.begin("game", "C", "OPEN", "legacy", 1, token="shared",
+                                   market="m", outcome="home")
+        self.ledger.fill(aid, 4, .5)
+        with self.ledger.db:
+            self.ledger.db.execute("UPDATE attempts SET identity_verified=0 WHERE attempt_id=?", (aid,))
+        self.ledger.handoff("game", "C", token="shared", market="m", outcome="home",
+                            reason="legacy_log_unverified", action="OPEN", order_id="legacy")
+        self.assertEqual(self.task("C")["size"], 0)
+        self.assertEqual(self.task("C")["legacy_bought_size"], 4)
+        self.assertEqual(self.ledger.other_token_shares("game", "A", "shared"), 4)
+
+    def test_binding_legacy_asset_preserves_identity_and_rejects_conflicts_atomically(self):
+        aid, _ = self.ledger.begin("game", "C", "OPEN", "legacy", 1)
+        self.ledger.fill(aid, 4, .5)
+        with self.ledger.db:
+            self.ledger.db.execute("UPDATE attempts SET identity_verified=0 WHERE attempt_id=?", (aid,))
+        self.ledger.bind_asset("game", "C", token="shared", market="m", outcome="home")
+        row, = self.ledger.rows()
+        self.assertEqual((row["token"], row["identity_verified"], row["bought_size"]), ("shared", 0, 4))
+        with self.assertRaises(ValueError):
+            self.ledger.bind_asset("game", "C", token="another", market="m", outcome="home")
+        self.assertEqual(self.ledger.rows()[0], row)
+
 
 if __name__ == "__main__":
     unittest.main()

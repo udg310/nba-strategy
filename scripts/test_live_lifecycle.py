@@ -100,6 +100,104 @@ class Lifecycle(unittest.TestCase):
             self.assertEqual([(p["ch"], p["size"]) for p in rebuilt.positions], [("C", 4)])
         self.assertEqual(self.db.open_rows()[0]["channel"], "C")
 
+    def test_short_wallet_preserves_sibling_and_resumes_when_balance_catches_up(self):
+        self.buy("A", "4")
+        self.buy("C", "4")
+        trader = self.trader()
+        trader._work_inflight(self.g, time.time())
+        position = next(p for p in trader.positions if p["ch"] == "A")
+        with patch.object(lr, "token_balance", return_value=4):
+            trader._sell(position)
+        self.assertEqual(self.sent, [])
+        self.assertEqual(position["size"], 4)
+        self.assertEqual(self.db.exit_intent("game", "A"), "resume_close")
+        with patch.object(lr, "token_balance", return_value=8):
+            trader._manage_exits(dict(self.g, period=1, detail="10:00"), time.time())
+        self.assertEqual(self.sent, [("SELL", 4)])
+
+    def test_short_wallet_cannot_shrink_our_sale_into_sibling_inventory(self):
+        self.buy("A", "6")
+        self.buy("C", "4")
+        trader = self.trader()
+        trader._work_inflight(self.g, time.time())
+        position = next(p for p in trader.positions if p["ch"] == "A")
+        with patch.object(lr, "token_balance", return_value=3):
+            trader._sell(position)
+        self.assertEqual(self.sent, [])
+        self.assertEqual(position["size"], 6)
+
+    def test_wallet_check_preserves_a_sibling_already_handed_to_account_reconciliation(self):
+        self.buy("A", "4")
+        self.buy("C", "4")
+        trader = self.trader()
+        trader._work_inflight(self.g, time.time())
+        a, c = sorted(trader.positions, key=lambda p: p["ch"])
+        self.db.handoff("game", "C", action="OPEN", order_id="buy-C", token="d", market="m",
+                        outcome="Dog", reason="pending_buy_at_final", position_id=c["position_id"])
+        trader._drop(c)
+        with patch.object(lr, "token_balance", return_value=4):
+            trader._sell(a)
+        self.assertEqual(self.sent, [])
+        self.assertEqual(self.db.tasks()[0]["size"], 4)
+
+    def test_wallet_check_includes_legacy_asset_after_original_order_is_verified(self):
+        self.buy("A", "4")
+        legacy = self.buy("C", "4")
+        self.db.fill(legacy, 4, .5)
+        with self.db.db:
+            self.db.db.execute("""UPDATE attempts SET token='',market='',outcome='',identity_verified=0
+                WHERE attempt_id=?""", (legacy,))
+        self.client.get_order.return_value = dict(id="buy-C", asset_id="d", market="m",
+                                                   side="BUY", status="MATCHED", size_matched="4")
+        trader = self.trader()
+        trader._work_inflight(self.g, time.time())
+        position = next(p for p in trader.positions if p["ch"] == "A")
+        with patch.object(lr, "token_balance", return_value=4):
+            trader._sell(position)
+        self.assertEqual(self.sent, [])
+        restored = next(r for r in self.db.rows() if r["attempt_id"] == legacy)
+        self.assertEqual((restored["token"], restored["market"], restored["outcome"]), ("d", "m", "Dog"))
+
+    def test_pending_sale_is_reconciled_even_when_wallet_is_short(self):
+        self.buy("A", "4")
+        self.buy("C", "4")
+        trader = self.trader()
+        trader._work_inflight(self.g, time.time())
+        a, c = sorted(trader.positions, key=lambda p: p["ch"])
+        trader._sell(a)
+        self.trades.append(dict(id="sold-a", size="4", price=".5", status="CONFIRMED",
+                                side="SELL", asset_id="d", market="m", taker_order_id="sell-1"))
+        with patch.object(lr, "token_balance", return_value=4):
+            trader._sell(a)
+            trader._sell(c)
+        self.assertEqual(self.sent, [("SELL", 4), ("SELL", 4)])
+        self.assertNotIn(a, trader.positions)
+
+    def test_unfinished_order_never_reposts_after_timeout_or_restart(self):
+        self.buy("A", "4")
+        self.buy("C", "4")
+        trader = self.trader()
+        trader._work_inflight(self.g, time.time())
+        position = next(p for p in trader.positions if p["ch"] == "A")
+        trader._sell(position)
+        original_time = time.time()
+        replies = [
+            dict(status="LIVE", size_matched="0"),
+            dict(status="CANCELED"),
+            dict(status="CANCELED", size_matched=".01"),
+        ]
+        for delay, reply in zip((36, 901, 1801), replies):
+            self.client.get_order.return_value = dict(id="sell-1", asset_id="d", market="m",
+                                                       side="SELL", **reply)
+            with patch.object(lr.time, "time", return_value=original_time + delay):
+                trader._sell(position)
+        rebuilt = self.trader()
+        position = next(p for p in rebuilt.positions if p["ch"] == "A")
+        rebuilt._sell(position)
+        self.assertEqual(self.sent, [("SELL", 4)])
+        close, = [r for r in self.db.rows() if r["action"] == "CLOSE"]
+        self.assertEqual((close["order_id"], close["state"]), ("sell-1", lr.ACCEPTED))
+
     def test_late_buy_after_deadline_and_restart_sells_only_increment(self):
         self.buy("C", "4")
         first = self.trades.pop()

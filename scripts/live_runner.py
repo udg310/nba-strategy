@@ -170,6 +170,7 @@ SELL_WINDOW = 900
 # freezes every other position in that game -- including a DL margin stop on
 # a collapsing lead.  A stop must not hold the thread for the full window.
 STOP_SELL_WINDOW = 120
+RECONCILE_GRACE = 5      # seconds to let the balance API catch up before reporting
 REPOST_AFTER = 30        # seconds to wait before re-checking an unfilled sell
 MAX_SLIP = 0.03
 RETRY_GAP = 3
@@ -486,6 +487,8 @@ class GameTrader(threading.Thread):
         self.pending = set()
         self.positions = []
         self.inflight = {}
+        self.sell_threads = []       # sells in flight, so stop() can wait
+        self.tokens_seen = set()     # every token this game ever held
         self.seen_ids = set()      # trade IDs already attributed to a position
         if LEDGER is not None:
             # A persisted OPEN attempt means this game/channel was already
@@ -504,9 +507,36 @@ class GameTrader(threading.Thread):
     def stop(self):
         self.stop_evt.set()
         self.put(None)
+        self.join_sells(timeout=20)
 
     def flat(self):
         return not self.positions and not self.inflight
+
+    def log_reconcile(self):
+        """One line per game: the wallet vs what this trader says it holds.
+
+        Every token this game touched must be back to zero once the trader is
+        flat.  Anything still in the wallet there was never attributed to a
+        channel -- invisible to the P&L, invisible to the stop, but real.
+        """
+        if not self.tokens_seen:
+            return
+        held = {tok: token_balance(self.client, tok)
+                for tok in sorted(self.tokens_seen)}
+        if any(h is not None and h > DUST for h in held.values()):
+            time.sleep(RECONCILE_GRACE)       # the balance API lags a sell
+            held = {tok: (token_balance(self.client, tok)
+                          if h is not None and h > DUST else h)
+                    for tok, h in held.items()}
+        out = {}
+        for tok, h in held.items():
+            accounted = round(sum(p["size"] for p in self.positions
+                                  if p["token"] == tok), 6)
+            out[tok[:12]] = {"held": None if h is None else round(h, 6),
+                             "accounted": accounted}
+        log({"ev": "reconcile_summary", "gid": self.gid, "tokens": out,
+             "clean": all(v["held"] is None or v["held"] <= DUST
+                          for v in out.values())})
 
     def run(self):
         log({"ev": "trader_start", "gid": self.gid, "fav": self.res.get("fav"),
@@ -729,6 +759,7 @@ class GameTrader(threading.Thread):
                # against, and the audit link back to the signal
                "fill_shares": shares, "adopted": 0.0}
         self.positions.append(pos)
+        self.tokens_seen.add(pos["token"])
         with LOCK:
             ALL_POSITIONS.append(pos)
             first = not CONFIRMED["buy"]
@@ -909,59 +940,99 @@ class GameTrader(threading.Thread):
                           "order_id": oid, "res": res, "state": state}
 
     # ---- exit ----
+    def _exit_reason(self, p, g, bid, m_now, el, finished):
+        """The one place that decides WHY a position leaves.  Live and dry
+        runs share it, so a dry run cannot drift from what live would do."""
+        if p["style"] != "process":
+            if g["state"] == "post":
+                return "settle_hold"
+            try:
+                spec = channel_spec(p["ch"])
+            except KeyError:      # a resumed row with an unknown channel
+                spec = {}
+            stop = spec.get("stop_margin")
+            stop_hi = spec.get("stop_margin_hi")
+            if m_now is not None:
+                if stop is not None and m_now < stop:
+                    return "margin_stop"
+                if stop_hi is not None and m_now > stop_hi:
+                    return "margin_stop"
+            return None
+        if (bid is not None and p.get("tp") is not None
+                and (bid - S.exit_cost(bid)) >= p["entry"] + p["tp"]):
+            return "target"
+        hold = S.CHANNELS[p["ch"]].get("game_hold")
+        if (hold and p.get("el_in") is not None and el is not None
+                and el - p["el_in"] >= hold):
+            return "time"
+        if finished or (el is not None and el >= S.FORCE_EL):
+            return "force"
+        return None
+
+    def _start_sell(self, p, reason, finished, bid=None, m_now=None):
+        """Hand the sell to its own thread.
+
+        `_sell` runs for the whole sell window waiting on a FOK.  Doing that
+        inline froze the game's only trader thread, so one un-fillable sell
+        also stopped every other position in that game -- including a DL
+        margin stop on a collapsing lead.  `p["selling"]` is still the
+        one-sell-at-a-time gate, now set under the lock.
+        """
+        with LOCK:
+            if p.get("selling") or time.time() < p.get("_retry_after", 0):
+                return
+            p["selling"] = True
+            p["exit_reason"] = reason
+        log({"ev": "exit", "gid": self.gid, "ch": p["ch"],
+             "outcome": p["outcome"], "reason": reason, "bid": bid,
+             "entry": p["entry"], "size": p["size"], "m_fav": m_now})
+        th = threading.Thread(target=self._sell, args=(p, finished),
+                              daemon=True, name=f"sell-{self.gid}-{p['ch']}")
+        self.sell_threads.append(th)
+        th.start()
+
+    def join_sells(self, timeout=45):
+        for th in list(self.sell_threads):
+            th.join(timeout=timeout)
+        self.sell_threads = [th for th in self.sell_threads if th.is_alive()]
+
     def _manage_exits(self, g, now):
-        # A dry run restores positions from the log exactly like a live one,
-        # so everything below would fire against the REAL wallet: --dry-run
-        # used to sell a resumed position at force-exit time with a live
-        # client.  `self.live` gates entries; it must gate exits too.
-        if not self.live:
-            self._dry_exit(g, now)
-            return
+        m_now = self.hist[-1][2] if self.hist else None
+        el = nd.elapsed_of(g["period"], g["detail"])
+        finished = (g["state"] == "post") or (el is not None and el >= 2880)
         for p in list(self.positions):
+            if p.get("selling"):
+                continue
+            # A dry run restores positions from the log exactly like a live
+            # one, so everything below would fire against the REAL wallet.
+            # Dry mode decides the same way and only reports.
+            if not self.live:
+                reason = self._exit_reason(p, g, book(self.client, p["token"])[1],
+                                           m_now, el, finished)
+                if reason and not p.get("_dry_logged"):
+                    p["_dry_logged"] = True
+                    log({"ev": "dry_exit", "gid": self.gid, "ch": p["ch"],
+                         "outcome": p["outcome"], "reason": reason,
+                         "entry": p["entry"], "size": p["size"],
+                         "m_fav": m_now, "note": "dry run: nothing was sold"})
+                continue
             if p["style"] != "process":
-                if p.get("selling"):
-                    continue
-                # D thesis: favourite leading 5-10.  If the lead turns
-                # negative, the thesis is broken: exit at the market rather
-                # than riding a -100% settlement.  This is a margin stop,
-                # not a price stop.  DL is the mirror image: its thesis is a
-                # dog leading 12+, so it exits when that lead collapses
-                # (`stop_margin_hi`, applied to the favourite margin).
-                try:
-                    spec = channel_spec(p["ch"])
-                except KeyError:      # a resumed row with an unknown channel
-                    spec = {}
-                stop = spec.get("stop_margin")
-                stop_hi = spec.get("stop_margin_hi")
-                if ((stop is not None or stop_hi is not None) and self.hist
-                        and g["state"] != "post"):
-                    m_now = self.hist[-1][2]
-                    if ((stop is not None and m_now < stop)
-                            or (stop_hi is not None and m_now > stop_hi)):
-                        p["selling"] = True
-                        p["exit_reason"] = "margin_stop"
-                        _, bid, _ = book(self.client, p["token"])
-                        log({"ev": "exit", "gid": self.gid, "ch": p["ch"],
-                             "outcome": p["outcome"], "reason": "margin_stop",
-                             "bid": bid, "entry": p["entry"],
-                             "size": p["size"], "m_fav": m_now})
-                        self._sell(p, finished=(g["state"] == "post"))
-                        continue
-                if g["state"] == "post":
+                reason = self._exit_reason(p, g, None, m_now, el, finished)
+                if reason == "margin_stop":
+                    self._start_sell(p, reason, finished,
+                                     bid=book(self.client, p["token"])[1],
+                                     m_now=m_now)
+                elif reason == "settle_hold":
                     log({"ev": "settle_hold", "gid": self.gid, "ch": p["ch"],
                          "outcome": p["outcome"], "entry": p["entry"],
                          "size": p["size"], "note": "held to resolution"})
                     self._drop(p)
-                continue
-            if p.get("selling"):
                 continue
             if p["size"] < DUST:
                 log({"ev": "reconcile_closed", "gid": self.gid, "ch": p["ch"],
                      "outcome": p["outcome"], "why": "dust", "size": p["size"]})
                 self._drop(p)
                 continue
-            el = nd.elapsed_of(g["period"], g["detail"])
-            finished = (g["state"] == "post") or (el is not None and el >= 2880)
             held = token_balance(self.client, p["token"])
             if held is not None and held < DUST:
                 # The balance API lags right after a buy; require 30s of
@@ -1024,63 +1095,10 @@ class GameTrader(threading.Thread):
                 continue
             if bid is None and not finished:
                 continue
-            reason = None
-            game_hold = S.CHANNELS[p["ch"]].get("game_hold")
-            if bid is not None and (bid - S.exit_cost(bid)) >= p["entry"] + p["tp"]:
-                reason = "target"
-            elif (game_hold and p.get("el_in") is not None and el is not None
-                  and el - p["el_in"] >= game_hold):
-                reason = "time"
-            elif finished or (el is not None and el >= S.FORCE_EL):
-                reason = "force"
+            reason = self._exit_reason(p, g, bid, m_now, el, finished)
             if reason is None:
                 continue
-            p["selling"] = True
-            p["exit_reason"] = reason
-            log({"ev": "exit", "gid": self.gid, "ch": p["ch"], "reason": reason,
-                 "bid": bid, "entry": p["entry"], "size": p["size"]})
-            self._sell(p, finished=finished)
-
-    def _dry_exit(self, g, now):
-        """Report what a live run WOULD do, without touching the wallet."""
-        if not self.hist:
-            return
-        m_now = self.hist[-1][2]
-        el = nd.elapsed_of(g["period"], g["detail"])
-        finished = (g["state"] == "post") or (el is not None and el >= 2880)
-        for p in self.positions:
-            reason = None
-            if p["style"] == "process":
-                bid = book(self.client, p["token"])[1]
-                hold = S.CHANNELS[p["ch"]].get("game_hold")
-                if (bid is not None and p.get("tp") is not None
-                        and (bid - S.exit_cost(bid)) >= p["entry"] + p["tp"]):
-                    reason = "target"
-                elif (hold and p.get("el_in") is not None and el is not None
-                      and el - p["el_in"] >= hold):
-                    reason = "time"
-                elif finished or (el is not None and el >= S.FORCE_EL):
-                    reason = "force"
-            else:
-                try:
-                    spec = channel_spec(p["ch"])
-                except KeyError:
-                    spec = {}
-                stop = spec.get("stop_margin")
-                stop_hi = spec.get("stop_margin_hi")
-                if g["state"] != "post":
-                    if stop is not None and m_now < stop:
-                        reason = "margin_stop"
-                    elif stop_hi is not None and m_now > stop_hi:
-                        reason = "margin_stop"
-                if reason is None and finished:
-                    reason = "settle_hold"
-            if reason and not p.get("_dry_logged"):
-                p["_dry_logged"] = True
-                log({"ev": "dry_exit", "gid": self.gid, "ch": p["ch"],
-                     "outcome": p["outcome"], "reason": reason,
-                     "entry": p["entry"], "size": p["size"],
-                     "m_fav": m_now, "note": "dry run: nothing was sold"})
+            self._start_sell(p, reason, finished, bid=bid)
 
     def _sell(self, p, finished=False):
         """Sell THIS position's shares only.
@@ -1181,7 +1199,12 @@ class GameTrader(threading.Thread):
                     # the book every RETRY_GAP for the whole window.  Once the
                     # game is final this must still close the position, or the
                     # trader never goes flat and the day never ends.
-                    p["selling"] = False
+                    with LOCK:
+                        p["selling"] = False
+                    # do not respawn a sell thread on the very next tick:
+                    # nothing changed, and the lead the stop reacted to has
+                    # not had time to recover
+                    p["_retry_after"] = time.time() + 30
                     log({"ev": "sell_gave_up", "gid": self.gid, "ch": p["ch"],
                          "outcome": p["outcome"],
                          "reason": p.get("exit_reason"),
@@ -1194,7 +1217,8 @@ class GameTrader(threading.Thread):
                         self._drop(p)
                     return
             time.sleep(RETRY_GAP)
-        p["selling"] = False
+        with LOCK:
+            p["selling"] = False
         self._close_attempt(p)
         if p["size"] < DUST:
             self._drop(p)
@@ -1315,9 +1339,10 @@ class GameTrader(threading.Thread):
                           "order_id": oid, "res": res, "state": state}
 
     def _drop(self, p):
-        if p in self.positions:
-            self.positions.remove(p)
+        # sells run on their own thread now, so both lists move concurrently
         with LOCK:
+            if p in self.positions:
+                self.positions.remove(p)
             if p in ALL_POSITIONS:
                 ALL_POSITIONS.remove(p)
 
@@ -1620,6 +1645,7 @@ def run(live):
             t.put(g)                       # last snapshot: lets it force-exit
             time.sleep(0.3)
             if t.flat():
+                t.log_reconcile()
                 t.stop()
                 t.join(timeout=45)
                 traders.pop(gid, None)

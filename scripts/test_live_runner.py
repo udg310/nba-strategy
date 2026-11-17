@@ -149,6 +149,7 @@ class LiveRunnerFixes(unittest.TestCase):
         t.positions.append(p)
         t._manage_exits({"state": "in", "period": 4, "detail": "6:00",
                          "home_score": 80, "away_score": 81}, now)
+        t.join_sells(timeout=5)
         self.assertNotIn(p, t.positions)
         self.assertTrue(any(r.get("reason") == "margin_stop" for r in self.logs))
         self.assertTrue(any(r.get("ev") == "sell" for r in self.logs))
@@ -176,6 +177,7 @@ class LiveRunnerFixes(unittest.TestCase):
             t.positions.append(p)
             t._manage_exits({"state": "in", "period": 4, "detail": "3:00",
                              "home_score": 90, "away_score": 92}, now)
+            t.join_sells(timeout=5)
         finally:
             lr.channel_spec = orig
         self.assertNotIn(p, t.positions)
@@ -248,6 +250,7 @@ class LiveRunnerFixes(unittest.TestCase):
         # period 3, 6:00 -> elapsed 1800 >= 30*60 (corrected clock)
         t._manage_exits({"state": "in", "period": 3, "detail": "6:00",
                          "home_score": 60, "away_score": 60}, now)
+        t.join_sells(timeout=5)
         self.assertNotIn(p, t.positions)
         self.assertTrue(any(r.get("reason") == "time" for r in self.logs))
 
@@ -511,6 +514,63 @@ class LiveRunnerFixes(unittest.TestCase):
         t.positions = []
         got = t._fills("td", "BUY", set(), int(time.time()) - 5, "our-order")
         self.assertEqual(len(got), 1)
+
+    # ---- one un-fillable sell must not freeze the rest of the game ----
+    def test_sell_does_not_block_the_other_positions(self):
+        old = (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+               lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance)
+        lr.SELL_WINDOW, lr.STOP_SELL_WINDOW = 0.4, 0.4
+        lr.REPOST_AFTER, lr.RETRY_GAP = 0.05, 0.01
+        lr.book = lambda client, tok: (0.70, 0.68, "0.01")
+        lr.market_order = self._order("SELL", fill=None)   # never fills
+        lr.token_balance = lambda client, tok: 40.0
+        self.fake.matched = None                           # no evidence
+        lr.DOGLOCK_CH["stop_margin_hi"] = -5.0             # stop armed
+        try:
+            t = lr.GameTrader("gh", RES, "HOME", True)
+            now = time.time()
+            t.hist = [(now, 2000.0, -2.0, ("h", "a"))]
+            a = {"gid": "gh", "ch": "A", "token": "td", "outcome": "Dog",
+                 "entry": 0.40, "size": 4.0, "t_in": now - 60, "el_in": 900.0,
+                 "style": "process", "tp": 0.20, "selling": False}
+            dl = {"gid": "gh", "ch": "DL", "token": "td", "outcome": "Dog",
+                  "entry": 0.55, "size": 4.0, "t_in": now - 60,
+                  "el_in": 1300.0, "style": "settle", "tp": None,
+                  "stop_shares": 4.0, "selling": False}
+            t.positions.extend([a, dl])
+            started = time.time()
+            t._manage_exits({"state": "in", "period": 4, "detail": "6:00",
+                             "home_score": 70, "away_score": 72}, now)
+            took = time.time() - started
+        finally:
+            t.join_sells(timeout=5)
+            lr.DOGLOCK_CH["stop_margin_hi"] = None
+            (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+             lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance) = old
+        self.assertLess(took, 0.2, "the tick must not wait for the sell")
+        # both exits were started: A's target and DL's margin stop
+        reasons = {r.get("reason") for r in self.logs if r.get("ev") == "exit"}
+        self.assertIn("target", reasons)
+        self.assertIn("margin_stop", reasons)
+
+    # ---- one line per game: wallet vs what the trader thinks it holds ----
+    def test_reconcile_summary_reports_leftover_shares(self):
+        old = lr.RECONCILE_GRACE
+        lr.RECONCILE_GRACE = 0
+        self.addCleanup(setattr, lr, "RECONCILE_GRACE", old)
+        lr.token_balance = lambda client, tok: 3.5      # never attributed
+        t = lr.GameTrader("gm", RES, "HOME", True)
+        t.tokens_seen.add("td")
+        t.log_reconcile()
+        row = [r for r in self.logs if r.get("ev") == "reconcile_summary"][0]
+        self.assertFalse(row["clean"])
+        self.assertAlmostEqual(row["tokens"]["td"]["held"], 3.5)
+        # a clean game says so and stays quiet about the numbers
+        self.logs = []
+        lr.token_balance = lambda client, tok: 0.0
+        t.log_reconcile()
+        row = [r for r in self.logs if r.get("ev") == "reconcile_summary"][0]
+        self.assertTrue(row["clean"])
 
     # ---- the sell is checked against what its own order bought ----
     def test_sell_flags_a_size_beyond_its_own_fill(self):

@@ -624,6 +624,14 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertEqual(
             len(self._sell_posts({"success": True, "tradeIDs": ["t1"]})), 1)
 
+    def test_order_hash_mismatch_is_not_treated_as_zero_fill(self):
+        # the exchange answered with a DIFFERENT order id: that is "review
+        # required", never "re-post at once".  The zero-fill inference must
+        # not override it.
+        posts = self._sell_posts({"success": True, "orderID": "other-hash"})
+        self.assertEqual(len(posts), 1,
+                         "a hash mismatch must stop the retry loop, not re-post")
+
     # ---- the sell clock starts after the trade lookup, not before ----
     def test_sell_window_starts_after_the_trade_lookup(self):
         old = (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,

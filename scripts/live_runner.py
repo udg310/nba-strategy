@@ -1350,8 +1350,15 @@ class GameTrader(threading.Thread):
         # live/delayed order -- is an unfilled order, not an order in flight.
         # Waiting the whole sell window on it is what left the Suns A position
         # sitting for two 15-minute stretches while the price ran away.
+        #
+        # But the inference must never override a hash mismatch: that is the
+        # one reply that means "the exchange signed something different from
+        # what we sent", and re-posting on top of it is exactly the mistake
+        # the order-id-mismatch check exists to prevent.
         inferred = False
-        if (state != "REJECTED_ZERO" and isinstance(res, dict)
+        if (state != "REJECTED_ZERO"
+                and c.get("reason") != "exchange order hash differs; review required"
+                and isinstance(res, dict)
                 and not any(res.get(k) for k in ("tradeIDs",
                                                  "transactionsHashes"))
                 and str(res.get("status") or "").upper()

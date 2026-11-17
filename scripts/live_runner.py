@@ -61,6 +61,11 @@ CASH_RESERVE = 0.20
 # hold to settlement.  Separate pool and slot cap so it never crowds A/C/D.
 LOCK_FRAC = float(os.environ.get("LOCK_FRAC", "0.10"))
 MAX_OPEN_LOCK = int(os.environ.get("MAX_OPEN_LOCK", "999"))
+# Read-only team board, started alongside the runner (best effort).
+BOARD_HOST = os.environ.get("BOARD_HOST", "0.0.0.0")
+BOARD_PORT = int(os.environ.get("BOARD_PORT", "8790"))
+BOARD_ENABLED = os.environ.get("BOARD_ENABLED", "1") == "1"
+BOARD_AUTH = os.environ.get("BOARD_AUTH", "")     # "user:pass"; required for a public host
 LOCK_MARGIN = 12.0
 LOCK_ENABLED = os.environ.get("LOCK_ENABLED", "0") == "1"
 LOCK_CH = {"style": "settle", "side": "fav", "weight": 1.0, "tp": None,
@@ -1168,6 +1173,28 @@ def _live_run():
         LEDGER = None
 
 
+def start_board():
+    """Launch the read-only team board alongside the runner (best effort)."""
+    if not BOARD_ENABLED:
+        return
+    import subprocess
+    import sys as _sys
+    try:
+        cmd = [_sys.executable, "-I", os.path.join(ROOT, "scripts", "team_dashboard.py"),
+               "--runner", os.path.join(ROOT, "data", "live_trade_final"),
+               "--host", BOARD_HOST, "--port", str(BOARD_PORT)]
+        if BOARD_AUTH:
+            cmd += ["--auth", BOARD_AUTH]
+        if BOARD_HOST not in ("127.0.0.1", "localhost") and not BOARD_AUTH:
+            log({"ev": "board_skip", "why": "public host without BOARD_AUTH"})
+            return
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+        log({"ev": "board_start", "host": BOARD_HOST, "port": BOARD_PORT})
+    except Exception as e:
+        log({"ev": "board_err", "err": str(e)[:150]})
+
+
 def run(live):
     client = make_client()
     bal = balance(client)
@@ -1179,6 +1206,7 @@ def run(live):
         log({"ev": "abort", "why": "balance too low", "balance": bal})
         return
 
+    start_board()
     filled, _done = resume_plan()
     resumed = set()
     traders = {}

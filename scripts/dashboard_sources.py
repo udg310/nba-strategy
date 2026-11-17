@@ -422,9 +422,9 @@ def executor(db, env, account):
 
 
 EVENT_FIELDS = {
-    "start": (),
-    "heartbeat": (),
-    "stopped": (),
+    "start": ("balance",),
+    "heartbeat": ("balance",),
+    "stopped": ("balance",),
     "resolve": ("slug", "tokens", "outcomes"),
     "buy": ("filled_shares", "entry", "usd", "fills", "fee", "fee_unit", "liquidity_role"),
     "sell": ("sold_shares", "exit", "fills", "fee", "fee_unit", "liquidity_role"),
@@ -598,7 +598,7 @@ class RunnerFiles:
                     continue
                 if ev == "heartbeat":
                     last_heartbeat = max(last_heartbeat or r["time"], r["time"])
-                if ev not in ("resolve", "start", "heartbeat", "stopped"):
+                if ev != "resolve":
                     scoped.append((r["time"], path, r))
         scoped.sort(key=lambda row: row[0])
         return scoped, dict(public_market), bool(errors or ambiguous), last_heartbeat
@@ -659,6 +659,20 @@ def build_runner(scoped, markets, attempts, env):
     for at, path, r in scoped:
         game, channel = safe_id(r.get("gid")), safe_id(r.get("ch"))
         ev, outcome = r["ev"], label(r.get("outcome"))
+        # The live runner logs the wallet balance at start.  Use the first one
+        # as the accounting origin so the board can compute P&L without the
+        # executor ledger.
+        if ev == "start":
+            if snap["available_cash"] is None and r.get("balance") is not None:
+                snap["available_cash"] = maybe_number(r.get("balance"))
+                snap["known_origin"] = snap["available_cash"] is not None
+            continue
+        if ev in ("heartbeat", "stopped"):
+            # Latest wallet balance is the live cash figure the board shows;
+            # the closing "stopped" event carries the final one.
+            if r.get("balance") is not None:
+                snap["available_cash"] = maybe_number(r.get("balance"))
+            continue
         local = (path, game, channel)
         pid = resolve_pid(game, channel, r.get("position_id") or session_pids.get(local))
         if ev in ("resume_position", "buy") and pid:
@@ -1013,6 +1027,12 @@ class Sources:
         ):
             runner = build_runner(scoped, markets, attempts, self.env)
             self.projected = combine(base, manual, runner, markets)
+            # Our live has only the live runner (no executor ledger): use its
+            # start balance as the account origin so the board can compute P&L.
+            # When an executor ledger is present it stays the book of record.
+            if not base["activity"] and runner["available_cash"] is not None:
+                self.projected["available_cash"] = runner["available_cash"]
+                self.projected["known_origin"] = True
             self.last_event = {
                 name: max((a["time"] for a in source["activity"]), default=None)
                 for name, source in [("runner", runner), ("executor", base)]

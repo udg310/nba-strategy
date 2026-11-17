@@ -25,8 +25,9 @@ from executor_lock import account_lock
 
 API = "/api/dashboard/v1"
 STATIC = ROOT / "dashboard"
-# Exclude the first live trading day (November 14) from this account's reports.
-LIVE_REPORT_START = datetime(2026, 11, 15, tzinfo=HK)
+# Reports start from the current Hong Kong day, so the board shows today's
+# live P&L without needing the executor ledger's account origin.
+LIVE_REPORT_START = datetime.now(HK).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def number(value, default, maximum):

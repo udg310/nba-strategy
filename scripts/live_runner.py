@@ -338,6 +338,35 @@ def _round_up_tick(x, tick):
     return round(math.ceil((x - 1e-9) / step) * step, 3 if step < 0.01 else 2)
 
 
+def order_matched(client, order_id):
+    """Shares the exchange says THIS order matched, or None if unknown.
+
+    The per-order record is the only ownership evidence that is not shared:
+    the token balance is the sum of every channel holding the token AND it
+    lags, so using it to decide "did my sell fill?" both double-sells and
+    sells a sibling's shares.
+    """
+    if not order_id:
+        return None
+    try:
+        o = client.get_order(order_id)
+    except Exception:
+        return None
+    if not isinstance(o, dict):
+        return None
+    for k in ("size_matched", "sizeMatched", "matched_size", "filled_size"):
+        v = o.get(k)
+        if v not in (None, ""):
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                pass
+    st = str(o.get("status") or "").upper()
+    if st in ("CANCELED", "CANCELLED", "UNMATCHED", "EXPIRED"):
+        return 0.0
+    return None
+
+
 def _round_down_tick(x, tick):
     step = _price_step(tick)
     return round(math.floor((x + 1e-9) / step) * step, 3 if step < 0.01 else 2)
@@ -877,6 +906,13 @@ class GameTrader(threading.Thread):
 
     # ---- exit ----
     def _manage_exits(self, g, now):
+        # A dry run restores positions from the log exactly like a live one,
+        # so everything below would fire against the REAL wallet: --dry-run
+        # used to sell a resumed position at force-exit time with a live
+        # client.  `self.live` gates entries; it must gate exits too.
+        if not self.live:
+            self._dry_exit(g, now)
+            return
         for p in list(self.positions):
             if p["style"] != "process":
                 if p.get("selling"):
@@ -1001,6 +1037,47 @@ class GameTrader(threading.Thread):
                  "bid": bid, "entry": p["entry"], "size": p["size"]})
             self._sell(p, finished=finished)
 
+    def _dry_exit(self, g, now):
+        """Report what a live run WOULD do, without touching the wallet."""
+        if not self.hist:
+            return
+        m_now = self.hist[-1][2]
+        el = nd.elapsed_of(g["period"], g["detail"])
+        finished = (g["state"] == "post") or (el is not None and el >= 2880)
+        for p in self.positions:
+            reason = None
+            if p["style"] == "process":
+                bid = book(self.client, p["token"])[1]
+                hold = S.CHANNELS[p["ch"]].get("game_hold")
+                if (bid is not None and p.get("tp") is not None
+                        and (bid - S.exit_cost(bid)) >= p["entry"] + p["tp"]):
+                    reason = "target"
+                elif (hold and p.get("el_in") is not None and el is not None
+                      and el - p["el_in"] >= hold):
+                    reason = "time"
+                elif finished or (el is not None and el >= S.FORCE_EL):
+                    reason = "force"
+            else:
+                try:
+                    spec = channel_spec(p["ch"])
+                except KeyError:
+                    spec = {}
+                stop = spec.get("stop_margin")
+                stop_hi = spec.get("stop_margin_hi")
+                if g["state"] != "post":
+                    if stop is not None and m_now < stop:
+                        reason = "margin_stop"
+                    elif stop_hi is not None and m_now > stop_hi:
+                        reason = "margin_stop"
+                if reason is None and finished:
+                    reason = "settle_hold"
+            if reason and not p.get("_dry_logged"):
+                p["_dry_logged"] = True
+                log({"ev": "dry_exit", "gid": self.gid, "ch": p["ch"],
+                     "outcome": p["outcome"], "reason": reason,
+                     "entry": p["entry"], "size": p["size"],
+                     "m_fav": m_now, "note": "dry run: nothing was sold"})
+
     def _sell(self, p, finished=False):
         """Sell THIS position's shares only.
 
@@ -1068,23 +1145,18 @@ class GameTrader(threading.Thread):
                 # fill, so repost at the new bid.  Selling already-sold shares
                 # would be rejected by the exchange, so this cannot double.
                 if time.time() - posted_at > REPOST_AFTER:
-                    # A/C/D/DL can share one token (all three dog channels buy
-                    # the DOG).  The token balance is then the sum of every
-                    # holder's shares, so "bal >= p.size" would be true even
-                    # after OUR shares sold -- reposting there would sell
-                    # another channel's position.  Compare against what the
-                    # other positions on this token account for instead: any
-                    # excess over that is still ours.  DL's margin stop fires
-                    # exactly when A/C may still be open, so this path matters.
-                    same = [x for x in self.positions
-                            if x["token"] == p["token"] and x is not p]
-                    others = sum(x["size"] for x in same)
-                    bal = token_balance(self.client, p["token"])
-                    if bal is not None and bal - others >= p["size"] - DUST:
+                    # Repost only on positive evidence that OUR order matched
+                    # nothing.  The wallet balance is not evidence: it is the
+                    # sum of every channel on this token and it lags exactly
+                    # when it matters, so a filled sell reads as "still mine"
+                    # and the repost sells a sibling's shares.  No evidence
+                    # (API error, no order id) means wait, not guess.
+                    matched = order_matched(self.client, order_id)
+                    if matched is not None and matched <= DUST:
                         posted = False
                         posted_unknown = False
                         order_id = None
-                        last = "no fill after 30s"
+                        last = "exchange reports 0 matched"
                 time.sleep(RETRY_GAP)
                 continue
 
@@ -1098,6 +1170,15 @@ class GameTrader(threading.Thread):
                         f"{info.get('order_id')}")
             else:
                 last = info.get("err")
+                if info.get("terminal"):
+                    # nothing to sell: stop this attempt instead of hammering
+                    # the book every RETRY_GAP for the whole window
+                    p["selling"] = False
+                    log({"ev": "sell_gave_up", "gid": self.gid, "ch": p["ch"],
+                         "outcome": p["outcome"],
+                         "reason": p.get("exit_reason"),
+                         "remaining": round(p["size"], 6), "last": last})
+                    return
             time.sleep(RETRY_GAP)
         p["selling"] = False
         self._close_attempt(p)
@@ -1146,14 +1227,22 @@ class GameTrader(threading.Thread):
         # Size the sell from THIS position, never from the wallet balance:
         # the balance is shared with any other channel holding this token.
         qty = math.floor(p["size"] * 100) / 100
-        if bal is not None and bal < qty:
-            # the wallet cannot back our own position -- either another
-            # channel already sold or the record is stale.  Never sell more
-            # than the wallet holds, and make it visible.
-            log({"ev": "sell_qty_clamped", "gid": self.gid, "ch": p["ch"],
-                 "own": round(qty, 6), "bal": round(bal, 6),
-                 "order_id": p.get("position_id")})
-            qty = math.floor(bal * 100) / 100
+        if bal is not None:
+            # Refuse -- never shrink to fit -- when the wallet no longer backs
+            # our own position.  Shrinking to a shared balance is what let a
+            # stale A record sell C's shares: the wallet held 4 (C's) and the
+            # clamp happily posted a 4-share sell against them.  The only safe
+            # reading of "the wallet holds less than I do plus my neighbours"
+            # is that OUR shares are gone.
+            others = sum(x["size"] for x in self.positions
+                         if x["token"] == p["token"] and x is not p)
+            if bal - others < qty - DUST:
+                log({"ev": "sell_short_of_wallet", "gid": self.gid,
+                     "ch": p["ch"], "own": round(qty, 6),
+                     "bal": round(bal, 6), "others": round(others, 6),
+                     "position_id": p.get("position_id")})
+                return "rejected", {"err": "own shares not in the wallet",
+                                    "terminal": True}
         if qty <= 0:
             return "rejected", {"err": f"qty {qty} bal {bal}"}
         _, bid, tick = book(self.client, p["token"])
@@ -1293,7 +1382,17 @@ def resume_plan():
     # it cannot be entered again; the position is restored from the token
     # balance / order's trade record in the main loop.
     if LEDGER is not None:
+        # A ledger OPEN row stays FILLED after the position is sold (the CLOSE
+        # row is what closes), so the log is the authority: if this game and
+        # channel already produced a buy event, the ledger row is the same
+        # buy and must not be restored a second time.  That double count
+        # resurrected a fully-sold A as 4 shares and added C twice (12 shares
+        # restored against a wallet holding 4).
+        seen_ev = {(k[0], k[1]) for k in pos}
         for row in LEDGER.open_rows():
+            gk = (row["game_id"], row["channel"])
+            if gk in seen_ev:
+                continue
             k = (row["game_id"], row["channel"], None)
             if k in pos:
                 continue
@@ -1302,7 +1401,7 @@ def resume_plan():
                       "order_id": row["order_id"],
                       "attempt_id": row["attempt_id"],
                       "position_id": row["position_id"]}
-            done.add((row["game_id"], row["channel"]))
+            done.add(gk)
     open_pos = {}
     for k, v in pos.items():
         rem = v["size"] - v["sold"]
@@ -1442,21 +1541,25 @@ def run(live):
                     remaining = max(0.0, held - ev_sizes)
                     for ch, outcome, entry, size, t_in, el_in, order_id, \
                             attempt_id, position_id in items:
-                        need = size
-                        # An attempt with no recorded event size: take the
-                        # size the ledger wrote when it filled, rather than
-                        # handing it whatever balance is left over.
-                        if need <= 0 and attempt_id and LEDGER is not None:
-                            led_shares, led_px = LEDGER.filled_of(attempt_id)
-                            if led_shares and led_shares > DUST:
-                                need = led_shares
-                                if (entry is None or entry <= 0) and led_px:
-                                    entry = led_px
-                        if need <= 0 and remaining > DUST:
-                            alloc = remaining
-                            remaining = 0.0
+                        if size > 0:
+                            # rebuilt from the event log (bought - sold),
+                            # scaled so the set cannot exceed the wallet
+                            alloc = size * scale
                         else:
-                            alloc = (need * scale) if need > 0 else 0.0
+                            # ledger-only attempt: the log never recorded it,
+                            # so it may only take shares the wallet is not
+                            # already accounting for.  Never at its full fill
+                            # size -- those shares are usually the channels
+                            # that ARE in the log, already counted above.
+                            want = remaining
+                            if attempt_id and LEDGER is not None:
+                                led_shares, led_px = LEDGER.filled_of(attempt_id)
+                                if led_shares and led_shares > DUST:
+                                    want = min(led_shares, remaining)
+                                    if (entry is None or entry <= 0) and led_px:
+                                        entry = led_px
+                            alloc = min(want, remaining)
+                            remaining = max(0.0, remaining - alloc)
                         if alloc < DUST:
                             continue
                         # An attempt without an event has no entry price;

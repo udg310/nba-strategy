@@ -18,9 +18,16 @@ RES = {"fav": "Fav", "outcomes": ["Fav", "Dog"], "tokens": ["tf", "td"], "pre": 
 class FakeClient:
     def __init__(self):
         self.trades = []
+        # what GET /order/{id} answers; None means "no evidence"
+        self.matched = None
 
     def get_trades(self, params):
         return list(self.trades)
+
+    def get_order(self, oid):
+        if self.matched is None:
+            return None
+        return {"size_matched": str(self.matched)}
 
 
 class LiveRunnerFixes(unittest.TestCase):
@@ -150,6 +157,7 @@ class LiveRunnerFixes(unittest.TestCase):
     def test_doglock_margin_stop_exits_when_lead_collapses(self):
         lr.book = lambda client, tok: (0.42, 0.40, "0.01")
         lr.market_order = self._order("SELL", fill=-1)
+        lr.token_balance = lambda client, tok: 5.0      # the wallet backs it
         spec = dict(lr.DOGLOCK_CH, stop_margin_hi=-5.0)
         orig = lr.channel_spec
 
@@ -176,6 +184,56 @@ class LiveRunnerFixes(unittest.TestCase):
 
     def test_doglock_margin_stop_ships_off(self):
         self.assertIsNone(lr.DOGLOCK_CH["stop_margin_hi"])
+
+    # ---- a dry run must never touch the wallet ----
+    def test_dry_run_never_sells_a_resumed_position(self):
+        lr.book = lambda client, tok: (0.52, 0.50, "0.01")
+        lr.market_order = self._order("SELL", fill=-1)
+        t = lr.GameTrader("g2", RES, "HOME", False)      # live=False
+        now = time.time()
+        t.hist = [(now, 3000.0, -3.0, ("h", "a"))]
+        p = {"gid": "g2", "ch": "C", "token": "td", "outcome": "Dog",
+             "entry": 0.40, "size": 4.0, "t_in": now - 100,
+             "el_in": 0.0, "style": "process", "tp": 0.20, "selling": False}
+        t.positions.append(p)
+        # force-exit time: a live trader would sell here
+        t._manage_exits({"state": "in", "period": 4, "detail": "1:00",
+                         "home_score": 90, "away_score": 88}, now)
+        self.assertEqual(self.orders, [], "a dry run must post nothing")
+        self.assertIn(p, t.positions)
+        self.assertTrue(any(r.get("ev") == "dry_exit" for r in self.logs))
+
+    # ---- a sold position must not come back on restart ----
+    def test_resume_does_not_relive_a_closed_channel(self):
+        base = os.path.join(lr.ROOT, "data", "live_trade_final", "_test_relive")
+        shutil.rmtree(base, ignore_errors=True)
+        os.makedirs(os.path.join(base, "run1"))
+        with open(os.path.join(base, "run1", "events.jsonl"), "w") as f:
+            for r in [
+                {"ev": "buy", "gid": "g1", "ch": "A", "outcome": "Dog",
+                 "entry": 0.50, "filled_shares": 4, "t": 100.0},
+                {"ev": "buy", "gid": "g1", "ch": "C", "outcome": "Dog",
+                 "entry": 0.50, "filled_shares": 4, "t": 101.0},
+                {"ev": "sell", "gid": "g1", "ch": "A", "outcome": "Dog",
+                 "sold_shares": 4},
+            ]:
+                f.write(json.dumps(r) + "\n")
+        # both OPEN rows stay FILLED after the sell -- only the CLOSE row closes
+        for ch in ("A", "C"):
+            aid, ok = lr.LEDGER.begin("g1", ch, "OPEN", f"o{ch}", 100)
+            self.assertTrue(ok)
+            lr.LEDGER.fill(aid, 4.0, 0.5)
+        old = lr.TODAY
+        lr.TODAY = "_test_relive"
+        try:
+            plan, done = lr.resume_plan()
+        finally:
+            lr.TODAY = old
+            shutil.rmtree(base, ignore_errors=True)
+        self.assertNotIn(("g1", "A", "Dog"), plan, "A was sold: must not return")
+        self.assertNotIn(("g1", "A", None), plan, "nor from its ledger row")
+        self.assertEqual(plan[("g1", "C", "Dog")][1], 4.0)
+        self.assertNotIn(("g1", "C", None), plan, "C must not be counted twice")
 
     # ---- C 30 game-clock minute exit ----
     def test_c_game_clock_time_exit(self):
@@ -310,6 +368,7 @@ class LiveRunnerFixes(unittest.TestCase):
         lr.book = lambda client, tok: (0.55, 0.50, "0.01")
         lr.market_order = fake_post
         lr.token_balance = lambda client, tok: 4.46
+        self.fake.matched = 0.0        # the exchange killed the FOK: 0 matched
         try:
             t = lr.GameTrader("gr", RES, "HOME", True)
             p = {"gid": "gr", "ch": "C", "token": "td", "outcome": "Dog",
@@ -386,6 +445,29 @@ class LiveRunnerFixes(unittest.TestCase):
                                msg="must sell our size, never the shared balance")
         self.assertAlmostEqual(sib["size"], 4.0, msg="the sibling is untouched")
 
+    def test_stale_position_never_sells_a_siblings_shares(self):
+        # A and C each bought 4; A's sell already filled, but A's record is
+        # stale (trade API lagged).  The wallet now holds only C's 4.  Selling
+        # A's 4 now would take C's shares -- refuse, do not shrink to fit.
+        lr.book = lambda client, tok: (0.55, 0.50, "0.01")
+        lr.market_order = self._order("SELL", fill=-1)
+        lr.token_balance = lambda client, tok: 4.0
+        t = lr.GameTrader("gz", RES, "HOME", True)
+        sib = {"gid": "gz", "ch": "C", "token": "td", "outcome": "Dog",
+               "entry": 0.40, "size": 4.0, "t_in": time.time(),
+               "el_in": 300.0, "style": "process", "tp": 0.20,
+               "selling": False}
+        p = {"gid": "gz", "ch": "A", "token": "td", "outcome": "Dog",
+             "entry": 0.40, "size": 4.0, "t_in": time.time(),
+             "el_in": 300.0, "style": "process", "tp": 0.20,
+             "selling": True, "exit_reason": "target"}
+        t.positions.extend([sib, p])
+        t._sell(p)
+        self.assertEqual(self.orders, [], "must not sell the sibling's shares")
+        self.assertTrue(any(r.get("ev") == "sell_short_of_wallet"
+                            for r in self.logs))
+        self.assertAlmostEqual(sib["size"], 4.0)
+
     def test_excess_is_not_folded_into_a_sibling_channel(self):
         lr.book = lambda client, tok: (0.60, 0.50, "0.01")
         lr.token_balance = lambda client, tok: 10.0     # 8 accounted + 2 loose
@@ -455,7 +537,7 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertEqual(flagged[0]["position_id"], "A1")
 
     # ---- a shared token must not make one channel sell another's shares ----
-    def _sweep(self, balance, sibling):
+    def _sweep(self, matched, balance=8.0, sibling=4.0):
         """Run one sell with a sibling position on the same token; return posts."""
         old = (lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP,
                lr.book, lr.market_order, lr.token_balance)
@@ -471,6 +553,7 @@ class LiveRunnerFixes(unittest.TestCase):
         lr.book = lambda client, tok: (0.55, 0.50, "0.01")
         lr.market_order = fake_post
         lr.token_balance = lambda client, tok: balance
+        self.fake.matched = matched
         try:
             t = lr.GameTrader("gs", RES, "HOME", True)
             sib = {"gid": "gs", "ch": "A", "token": "td", "outcome": "Dog",
@@ -488,12 +571,20 @@ class LiveRunnerFixes(unittest.TestCase):
              lr.book, lr.market_order, lr.token_balance) = old
         return posts
 
-    def test_shared_token_reposts_only_while_our_shares_remain(self):
-        # balance 4.0 == the sibling's 4.0: OUR shares are gone, so reposting
-        # would sell A's position.  One post only.
-        self.assertEqual(len(self._sweep(4.0, 4.0)), 1)
-        # balance 8.0 == ours (4) + sibling (4): our shares are still there.
-        self.assertGreaterEqual(len(self._sweep(8.0, 4.0)), 2)
+    def test_repost_ignores_the_shared_balance(self):
+        # The exchange says our sell matched 0 -> repost is safe.
+        self.assertGreaterEqual(len(self._sweep(matched=0.0)), 2)
+        # The exchange says our sell filled, but the balance API still shows
+        # every channel's shares.  Reposting here would sell A's position:
+        # one post only, no matter what the balance reads.
+        self.assertEqual(len(self._sweep(matched=4.0, balance=8.0)), 1)
+        # No evidence at all -> wait, never guess.
+        self.assertEqual(len(self._sweep(matched=None, balance=8.0)), 1)
+
+    def test_repost_needs_exchange_evidence(self):
+        self.assertEqual(lr.order_matched(self.fake, ""), None)
+        self.fake.matched = 2.5
+        self.assertAlmostEqual(lr.order_matched(self.fake, "o1"), 2.5)
 
     # ---- token shares we did not account for are added to the position ----
     def test_balance_extra_added(self):

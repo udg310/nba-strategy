@@ -631,7 +631,16 @@ class GameTrader(threading.Thread):
                 continue
 
             with LOCK:
-                if len(ALL_POSITIONS) >= MAX_OPEN:
+                # Lock has its own slot pool; A/C/D must not be crowded out by
+                # lock positions (and vice versa).  The signal-time check above
+                # uses the same split, so keep it consistent here.
+                if q.get("ch") == "L":
+                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] == "L")
+                    cap = MAX_OPEN_LOCK
+                else:
+                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] != "L")
+                    cap = MAX_OPEN
+                if n_open >= cap:
                     q["last_err"] = "open cap"
                     continue
             q["tries"] += 1

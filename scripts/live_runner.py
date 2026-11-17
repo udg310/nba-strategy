@@ -149,60 +149,13 @@ def _frac_of(ch):
     return STAKE_FRAC * S.CHANNELS[ch]["weight"]
 
 
-# ---- per-lot ownership -----------------------------------------------------
-# A/C/D/DL all buy the DOG token, so the wallet balance says nothing about
-# which channel owns what.  Every position therefore carries the exact lots
-# its own orders produced ({"order_id", "shares", "price"}), and a sell is
-# sized from those lots -- never from the token balance.
-def lot_shares(p):
-    lots = p.get("lots")
-    if lots is None:                 # a resumed/legacy position with no lots
-        return p["size"]
-    return sum(l["shares"] for l in lots)
+# ---- ownership -------------------------------------------------------------
+# One signal = one position = one order (the ledger enforces one OPEN per
+# game/channel), so a position's `size` and `entry` ARE its ledger row for
+# its own shares.  A/C/D/DL buy the same DOG token, so the wallet balance is
+# the sum of all of them and says nothing about ownership: every sell is
+# sized from `size`, never from the balance.
 
-
-def lot_add(p, order_id, shares, price):
-    p.setdefault("lots", []).append(
-        {"order_id": order_id or "", "shares": shares, "price": price})
-
-
-def lot_consume(p, shares):
-    """Shrink the lots pro-rata after a sell.  Returns how much they covered.
-
-    Not FIFO/LIFO: the exchange sells fungible shares, so no lot is "the one
-    that was sold" -- the exit rules belong to the position, not to the lot,
-    and nothing here is time-ordered.  Shrinking proportionally keeps the
-    remaining cost basis equal to the position's weighted average, which is
-    the only cost basis a settlement or a take-profit can actually mean.
-    """
-    lots = p.get("lots")
-    if lots is None:
-        return shares
-    total = sum(l["shares"] for l in lots)
-    if total <= 1e-9:
-        return 0.0
-    take = min(shares, total)
-    factor = (total - take) / total
-    for l in lots:
-        l["shares"] *= factor
-    p["lots"] = [l for l in lots if l["shares"] > 1e-9]
-    return take
-
-
-def lot_entry(p):
-    """Weighted-average entry of the lots still open (None if nothing left)."""
-    lots = p.get("lots")
-    if not lots:
-        return None
-    total = sum(l["shares"] for l in lots)
-    if total <= 1e-9:
-        return None
-    return sum(l["shares"] * l["price"] for l in lots) / total
-
-
-def lot_owner(p):
-    """The order ids behind a position, for the audit log."""
-    return [l.get("order_id") or "-" for l in p.get("lots") or []]
 
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
 SELL_WINDOW = 900
@@ -731,9 +684,7 @@ class GameTrader(threading.Thread):
                "outcome": q["outcome"], "entry": entry, "size": shares,
                "t_in": time.time(), "el_in": q.get("el_sig"),
                "position_id": q.get("attempt_id"),
-               "style": q["style"], "tp": q["tp"], "selling": False,
-               "lots": [{"order_id": q.get("order_id") or "",
-                         "shares": shares, "price": entry}]}
+               "style": q["style"], "tp": q["tp"], "selling": False}
         self.positions.append(pos)
         with LOCK:
             ALL_POSITIONS.append(pos)
@@ -747,7 +698,7 @@ class GameTrader(threading.Thread):
              "order_id": q.get("order_id"), "fills": nfills,
              "attempt_id": q.get("attempt_id"),
              "position_id": q.get("attempt_id"),
-             "el_in": q.get("el_sig"), "lots": lot_owner(pos)})
+             "el_in": q.get("el_sig")})
         if first:
             log({"ev": "CONFIRMED_BUY", "gid": self.gid, "ch": key,
                  "shares": shares, "entry": entry})
@@ -1007,9 +958,6 @@ class GameTrader(threading.Thread):
                              "holders": [x["ch"] for x in siblings]})
                 else:
                     p["size"] += extra
-                    lot_add(p, "", extra, p.get("entry") or 0.5)
-                    # keep `entry` the weighted average of what is still open
-                    p["entry"] = lot_entry(p) or p["entry"]
                     log({"ev": "reconcile_add", "gid": self.gid, "ch": p["ch"],
                          "outcome": p["outcome"], "held": held,
                          "accounted": round(ours, 6),
@@ -1070,7 +1018,6 @@ class GameTrader(threading.Thread):
                         seen.add(t["id"])
                         self.seen_ids.add(t["id"])
                 p["size"] = max(0.0, p["size"] - sold)
-                lot_consume(p, sold)
                 with LOCK:
                     first = not CONFIRMED["sell"]
                     CONFIRMED["sell"] = True
@@ -1078,7 +1025,7 @@ class GameTrader(threading.Thread):
                      "outcome": p["outcome"], "reason": p.get("exit_reason"),
                      "sold_shares": sold, "exit": px,
                      "remaining": round(p["size"], 6), "fills": len(fills),
-                     "order_id": order_id, "lots": lot_owner(p)})
+                     "order_id": order_id})
                 if first:
                     log({"ev": "CONFIRMED_SELL", "gid": self.gid, "ch": p["ch"],
                          "sold_shares": sold, "exit": px})
@@ -1168,16 +1115,16 @@ class GameTrader(threading.Thread):
 
     def _post_sell(self, p):
         bal = token_balance(self.client, p["token"])
-        # Size the sell from OUR lots, never from the wallet balance: the
-        # balance is shared with any other channel holding this token.
-        qty = math.floor(min(lot_shares(p), p["size"]) * 100) / 100
+        # Size the sell from THIS position, never from the wallet balance:
+        # the balance is shared with any other channel holding this token.
+        qty = math.floor(p["size"] * 100) / 100
         if bal is not None and bal < qty:
-            # the wallet cannot back our own lot -- either another channel
-            # already sold, or the record is stale.  Never sell more than we
-            # hold, and make it visible.
+            # the wallet cannot back our own position -- either another
+            # channel already sold or the record is stale.  Never sell more
+            # than the wallet holds, and make it visible.
             log({"ev": "sell_qty_clamped", "gid": self.gid, "ch": p["ch"],
                  "own": round(qty, 6), "bal": round(bal, 6),
-                 "lots": lot_owner(p)})
+                 "order_id": p.get("position_id")})
             qty = math.floor(bal * 100) / 100
         if qty <= 0:
             return "rejected", {"err": f"qty {qty} bal {bal}"}
@@ -1503,10 +1450,7 @@ def run(live):
                                "el_in": el_in,
                                "position_id": position_id or attempt_id,
                                "style": channel_spec(ch)["style"],
-                               "tp": channel_spec(ch)["tp"], "selling": False,
-                               "lots": [{"order_id": order_id or "",
-                                         "shares": alloc,
-                                         "price": entry or 0.5}]}
+                               "tp": channel_spec(ch)["tp"], "selling": False}
                         t.positions.append(pos)
                         with LOCK:
                             ALL_POSITIONS.append(pos)

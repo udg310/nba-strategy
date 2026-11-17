@@ -365,25 +365,8 @@ class LiveRunnerFixes(unittest.TestCase):
         pending, _ = self._dl_signal(wall_age=5, enable=False)
         self.assertFalse(pending)
 
-    # ---- per-lot ownership: A/C/DL share one token, lots keep them apart ----
-    def test_lot_arithmetic(self):
-        p = {"size": 10.0, "lots": [{"order_id": "o1", "shares": 6.0, "price": .50},
-                                    {"order_id": "o2", "shares": 4.0, "price": .60}]}
-        self.assertAlmostEqual(lr.lot_shares(p), 10.0)
-        self.assertAlmostEqual(lr.lot_entry(p), (6 * .5 + 4 * .6) / 10)
-        # a partial sell shrinks every lot pro-rata: no lot is "the one sold"
-        lr.lot_consume(p, 6.5)
-        self.assertAlmostEqual(lr.lot_shares(p), 3.5)
-        self.assertAlmostEqual(lr.lot_entry(p), (6 * .5 + 4 * .6) / 10,
-                               msg="cost basis must stay the weighted average")
-        self.assertEqual(len(p["lots"]), 2)
-        lr.lot_consume(p, 99.0)
-        self.assertAlmostEqual(lr.lot_shares(p), 0.0)
-        self.assertIsNone(lr.lot_entry(p))
-        # a position with no lots falls back to its size
-        self.assertAlmostEqual(lr.lot_shares({"size": 3.0}), 3.0)
-
-    def test_sell_posts_our_lot_not_the_shared_balance(self):
+    # ---- ownership: A/C/DL share one token, each position owns its own size ----
+    def test_sell_posts_our_size_not_the_shared_balance(self):
         lr.book = lambda client, tok: (0.55, 0.50, "0.01")
         lr.market_order = self._order("SELL", fill=-1)
         lr.token_balance = lambda client, tok: 8.0      # ours 4 + sibling 4
@@ -391,18 +374,16 @@ class LiveRunnerFixes(unittest.TestCase):
         sib = {"gid": "gl", "ch": "A", "token": "td", "outcome": "Dog",
                "entry": 0.40, "size": 4.0, "t_in": time.time(),
                "el_in": 300.0, "style": "process", "tp": 0.20,
-               "selling": False, "lots": [{"order_id": "oA", "shares": 4.0,
-                                           "price": 0.40}]}
+               "selling": False}
         p = {"gid": "gl", "ch": "DL", "token": "td", "outcome": "Dog",
              "entry": 0.55, "size": 4.0, "t_in": time.time(),
              "el_in": 1300.0, "style": "settle", "tp": None,
-             "selling": True, "exit_reason": "margin_stop",
-             "lots": [{"order_id": "oD", "shares": 4.0, "price": 0.55}]}
+             "selling": True, "exit_reason": "margin_stop"}
         t.positions.extend([sib, p])
         t._sell(p)
         self.assertTrue(self.orders, "the stop must post a sell")
         self.assertAlmostEqual(self.orders[0][2], 4.0,
-                               msg="must sell our lot, never the shared balance")
+                               msg="must sell our size, never the shared balance")
         self.assertAlmostEqual(sib["size"], 4.0, msg="the sibling is untouched")
 
     def test_excess_is_not_folded_into_a_sibling_channel(self):
@@ -414,13 +395,11 @@ class LiveRunnerFixes(unittest.TestCase):
         sib = {"gid": "gy", "ch": "A", "token": "td", "outcome": "Dog",
                "entry": 0.40, "size": 4.0, "t_in": now - 10,
                "el_in": 300.0, "style": "process", "tp": 0.20,
-               "selling": False, "lots": [{"order_id": "oA", "shares": 4.0,
-                                           "price": 0.40}]}
+               "selling": False}
         p = {"gid": "gy", "ch": "C", "token": "td", "outcome": "Dog",
              "entry": 0.40, "size": 4.0, "t_in": now - 10,
              "el_in": 300.0, "style": "process", "tp": 0.20,
-             "selling": False, "lots": [{"order_id": "oC", "shares": 4.0,
-                                         "price": 0.40}]}
+             "selling": False}
         t.positions.extend([sib, p])
         t._manage_exits({"state": "in", "period": 3, "detail": "6:00",
                          "home_score": 70, "away_score": 72}, now)

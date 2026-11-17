@@ -167,19 +167,37 @@ def lot_add(p, order_id, shares, price):
 
 
 def lot_consume(p, shares):
-    """Remove `shares` oldest-first.  Returns how much the lots covered."""
+    """Shrink the lots pro-rata after a sell.  Returns how much they covered.
+
+    Not FIFO/LIFO: the exchange sells fungible shares, so no lot is "the one
+    that was sold" -- the exit rules belong to the position, not to the lot,
+    and nothing here is time-ordered.  Shrinking proportionally keeps the
+    remaining cost basis equal to the position's weighted average, which is
+    the only cost basis a settlement or a take-profit can actually mean.
+    """
     lots = p.get("lots")
     if lots is None:
         return shares
-    left, done = shares, 0.0
-    while left > 1e-9 and lots:
-        take = min(lots[0]["shares"], left)
-        lots[0]["shares"] -= take
-        left -= take
-        done += take
-        if lots[0]["shares"] <= 1e-9:
-            lots.pop(0)
-    return done
+    total = sum(l["shares"] for l in lots)
+    if total <= 1e-9:
+        return 0.0
+    take = min(shares, total)
+    factor = (total - take) / total
+    for l in lots:
+        l["shares"] *= factor
+    p["lots"] = [l for l in lots if l["shares"] > 1e-9]
+    return take
+
+
+def lot_entry(p):
+    """Weighted-average entry of the lots still open (None if nothing left)."""
+    lots = p.get("lots")
+    if not lots:
+        return None
+    total = sum(l["shares"] for l in lots)
+    if total <= 1e-9:
+        return None
+    return sum(l["shares"] * l["price"] for l in lots) / total
 
 
 def lot_owner(p):
@@ -990,6 +1008,8 @@ class GameTrader(threading.Thread):
                 else:
                     p["size"] += extra
                     lot_add(p, "", extra, p.get("entry") or 0.5)
+                    # keep `entry` the weighted average of what is still open
+                    p["entry"] = lot_entry(p) or p["entry"]
                     log({"ev": "reconcile_add", "gid": self.gid, "ch": p["ch"],
                          "outcome": p["outcome"], "held": held,
                          "accounted": round(ours, 6),

@@ -367,14 +367,19 @@ class LiveRunnerFixes(unittest.TestCase):
 
     # ---- per-lot ownership: A/C/DL share one token, lots keep them apart ----
     def test_lot_arithmetic(self):
-        p = {"size": 10.0, "lots": [{"order_id": "o1", "shares": 6.0, "price": .5},
-                                    {"order_id": "o2", "shares": 4.0, "price": .6}]}
+        p = {"size": 10.0, "lots": [{"order_id": "o1", "shares": 6.0, "price": .50},
+                                    {"order_id": "o2", "shares": 4.0, "price": .60}]}
         self.assertAlmostEqual(lr.lot_shares(p), 10.0)
-        lr.lot_consume(p, 6.5)                     # oldest first
+        self.assertAlmostEqual(lr.lot_entry(p), (6 * .5 + 4 * .6) / 10)
+        # a partial sell shrinks every lot pro-rata: no lot is "the one sold"
+        lr.lot_consume(p, 6.5)
         self.assertAlmostEqual(lr.lot_shares(p), 3.5)
-        self.assertEqual([l["order_id"] for l in p["lots"]], ["o2"])
+        self.assertAlmostEqual(lr.lot_entry(p), (6 * .5 + 4 * .6) / 10,
+                               msg="cost basis must stay the weighted average")
+        self.assertEqual(len(p["lots"]), 2)
         lr.lot_consume(p, 99.0)
         self.assertAlmostEqual(lr.lot_shares(p), 0.0)
+        self.assertIsNone(lr.lot_entry(p))
         # a position with no lots falls back to its size
         self.assertAlmostEqual(lr.lot_shares({"size": 3.0}), 3.0)
 

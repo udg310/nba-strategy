@@ -1109,16 +1109,21 @@ class GameTrader(threading.Thread):
         share of dust (size precision is 2dp), which is treated as closed
         instead of retrying for 15 minutes.
         """
+        # Fetch the trade ids BEFORE starting the clock: this is a network
+        # call, and on a cold process it also pays the SDK import.  Counting
+        # that against the sell window meant a short window (the margin-stop
+        # one) could be spent before a single order was ever posted.
+        seen = self._trade_ids(p["token"])
         window = (STOP_SELL_WINDOW if p.get("exit_reason") == "margin_stop"
                   else SELL_WINDOW)
         deadline = time.time() + window
-        seen = self._trade_ids(p["token"])
         t0 = int(time.time())
         last = "no_attempt"
         posted = False
         posted_at = 0.0
         posted_unknown = False
         order_id = None
+        zero_retries = 0
         while time.time() < deadline and not self.stop_evt.is_set():
             fills = self._fills(p["token"], "SELL", seen, t0,
                                 order_id if posted else None)
@@ -1194,6 +1199,20 @@ class GameTrader(threading.Thread):
                         f"{info.get('order_id')}")
             else:
                 last = info.get("err")
+                if info.get("zero_fill"):
+                    # "accepted but nothing traded" is an inference, so bound
+                    # it: if the exchange keeps saying that, stop hammering
+                    # and let the next tick try with a fresh bid.
+                    zero_retries += 1
+                    if zero_retries > 6:
+                        with LOCK:
+                            p["selling"] = False
+                        p["_retry_after"] = time.time() + 5
+                        log({"ev": "sell_gave_up", "gid": self.gid,
+                             "ch": p["ch"], "outcome": p["outcome"],
+                             "reason": p.get("exit_reason"),
+                             "remaining": round(p["size"], 6), "last": last})
+                        return
                 if info.get("terminal"):
                     # nothing to sell: stop this attempt instead of hammering
                     # the book every RETRY_GAP for the whole window.  Once the
@@ -1326,6 +1345,20 @@ class GameTrader(threading.Thread):
 
         c = classify_post(res, oid)
         state = c.get("state", "UNKNOWN")
+        # A FOK either fills the moment it lands or is killed.  A reply that
+        # only says "accepted" -- no trade ids to point at, and not held as a
+        # live/delayed order -- is an unfilled order, not an order in flight.
+        # Waiting the whole sell window on it is what left the Suns A position
+        # sitting for two 15-minute stretches while the price ran away.
+        inferred = False
+        if (state != "REJECTED_ZERO" and isinstance(res, dict)
+                and not any(res.get(k) for k in ("tradeIDs",
+                                                 "transactionsHashes"))
+                and str(res.get("status") or "").upper()
+                not in ("DELAYED", "LIVE", "MATCHED")):
+            state = "REJECTED_ZERO"
+            c = {"state": state, "reason": "accepted without trade ids"}
+            inferred = True
         if LEDGER is not None and prepared.get("aid"):
             LEDGER.finish(prepared["aid"],
                           "REJECTED_ZERO" if state == "REJECTED_ZERO"
@@ -1334,7 +1367,8 @@ class GameTrader(threading.Thread):
         if state == "REJECTED_ZERO":
             return "rejected", {"err": c.get("reason") or "FOK unfilled",
                                 "size": qty, "bid": bid, "order_id": oid,
-                                "retryable": c.get("retryable", False)}
+                                "retryable": c.get("retryable", False),
+                                "zero_fill": inferred}
         return "posted", {"err": None, "size": qty, "bid": bid,
                           "order_id": oid, "res": res, "state": state}
 

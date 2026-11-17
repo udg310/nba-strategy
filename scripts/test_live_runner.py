@@ -367,7 +367,7 @@ class LiveRunnerFixes(unittest.TestCase):
             oid = f"o{len(posts)}"
             if on_prepared:
                 on_prepared(oid)
-            return {"success": True, "orderID": oid}, oid
+            return {"success": True, "orderID": oid, "status": "LIVE"}, oid
 
         lr.book = lambda client, tok: (0.55, 0.50, "0.01")
         lr.market_order = fake_post
@@ -572,6 +572,90 @@ class LiveRunnerFixes(unittest.TestCase):
         row = [r for r in self.logs if r.get("ev") == "reconcile_summary"][0]
         self.assertTrue(row["clean"])
 
+    # ---- a FOK that says "accepted" but traded nothing is retried at once ----
+    def _sell_posts(self, response, window=0.3):
+        old = (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+               lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance)
+        lr.SELL_WINDOW, lr.STOP_SELL_WINDOW = window, window
+        lr.REPOST_AFTER, lr.RETRY_GAP = 0.05, 0.01
+        posts = []
+
+        def fake_post(client, token, side, amount, price, tick,
+                      on_prepared=None):
+            oid = f"o{len(posts) + 1}"
+            posts.append(oid)
+            if on_prepared:
+                on_prepared(oid)
+            return response, oid
+        lr.book = lambda client, tok: (0.60, 0.55, "0.01")
+        lr.market_order = fake_post
+        lr.token_balance = lambda client, tok: 40.0
+        self.fake.matched = None
+        try:
+            t = lr.GameTrader("gq", RES, "HOME", True)
+            p = {"gid": "gq", "ch": "A", "token": "td", "outcome": "Dog",
+                 "entry": 0.41, "size": 4.0, "t_in": time.time(),
+                 "el_in": 1468.0, "style": "process", "tp": 0.20,
+                 "selling": True, "exit_reason": "target"}
+            t.positions.append(p)
+            t._sell(p)
+        finally:
+            (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+             lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance) = old
+        return posts
+
+    def test_accepted_without_trade_ids_is_retried(self):
+        self.assertGreaterEqual(
+            len(self._sell_posts({"success": True})), 2,
+            "an accepted-but-unfilled FOK must be re-posted immediately")
+
+    def test_zero_fill_retries_are_bounded(self):
+        # the inference cannot run away: at most 6 immediate re-posts, then
+        # the position waits for the next tick with a fresh bid
+        posts = self._sell_posts({"success": True}, window=5.0)
+        self.assertLessEqual(len(posts), 7, f"posted {len(posts)} times")
+
+    def test_delayed_order_is_not_reposted(self):
+        self.assertEqual(
+            len(self._sell_posts({"success": True, "status": "DELAYED"})), 1,
+            "a delayed order may still fill: never duplicate it")
+
+    def test_reply_with_trade_ids_is_not_reposted(self):
+        self.assertEqual(
+            len(self._sell_posts({"success": True, "tradeIDs": ["t1"]})), 1)
+
+    # ---- the sell clock starts after the trade lookup, not before ----
+    def test_sell_window_starts_after_the_trade_lookup(self):
+        old = (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+               lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance)
+        lr.SELL_WINDOW, lr.STOP_SELL_WINDOW = 0.3, 0.3
+        lr.REPOST_AFTER, lr.RETRY_GAP = 0.05, 0.01
+        lr.book = lambda client, tok: (0.60, 0.55, "0.01")
+        lr.market_order = self._order("SELL", fill=-1)
+        lr.token_balance = lambda client, tok: 40.0
+        slow = {"n": 0}
+        real_trades = lr.GameTrader._trade_ids
+
+        def slow_trades(self, tok):
+            slow["n"] += 1
+            time.sleep(0.4)          # a slow trade lookup on a cold process
+            return real_trades(self, tok)
+        lr.GameTrader._trade_ids = slow_trades
+        try:
+            t = lr.GameTrader("gw", RES, "HOME", True)
+            p = {"gid": "gw", "ch": "A", "token": "td", "outcome": "Dog",
+                 "entry": 0.41, "size": 4.0, "t_in": time.time(),
+                 "el_in": 1468.0, "style": "process", "tp": 0.20,
+                 "selling": True, "exit_reason": "target"}
+            t.positions.append(p)
+            t._sell(p)
+        finally:
+            lr.GameTrader._trade_ids = real_trades
+            (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+             lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance) = old
+        self.assertGreaterEqual(len(self.orders), 1,
+                                "a slow trade lookup must not eat the window")
+
     # ---- the sell is checked against what its own order bought ----
     def test_sell_flags_a_size_beyond_its_own_fill(self):
         lr.book = lambda client, tok: (0.55, 0.50, "0.01")
@@ -611,7 +695,7 @@ class LiveRunnerFixes(unittest.TestCase):
             oid = f"o{len(posts)}"
             if on_prepared:
                 on_prepared(oid)
-            return {"success": True, "orderID": oid}, oid
+            return {"success": True, "orderID": oid, "status": "LIVE"}, oid
         lr.book = lambda client, tok: (0.55, 0.50, "0.01")
         lr.market_order = fake_post
         lr.token_balance = lambda client, tok: balance

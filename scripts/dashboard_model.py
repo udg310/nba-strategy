@@ -10,6 +10,7 @@ from functools import lru_cache
 
 # Hong Kong has used UTC+08 year-round throughout the NBA trading data coverage.
 HK = timezone(timedelta(hours=8), "Asia/Hong_Kong")
+LIVE_REPORT_START = datetime(2026, 11, 15, tzinfo=HK)
 ZERO = Fraction(0)
 IDENTITY = ("game_id", "game_label", "asset_id", "channel", "market", "outcome")
 
@@ -652,12 +653,17 @@ def project(raw, quotes, now, baseline=None):
                 hidden_quote_deadlines[gid] = expiry
     summary.update(
         available_cash=raw.get("available_cash"),
+        day_start_cash=raw.get("opening_cash", {}).get(midnight.date().isoformat()),
         day_start_at=_stamp(midnight),
         valued_at=min(marked_times, key=_time) if marked_times else None,
         open_count=len(listed),
         review_count=sum(p["has_exposure"] and p["state"] == "review" for p in positions)
         + sum(not r.get("position_id") for r in rows),
     )
+    channel_values = defaultdict(list)
+    for p in positions:
+        if p["channel"] and p["has_exposure"] and p["active_today"]:
+            channel_values[p["channel"]].append(_from_metric(p["today"]))
     snapshot = {
         "account_label": raw.get("account_label"),
         "currency": raw.get("currency", "USD"),
@@ -666,6 +672,10 @@ def project(raw, quotes, now, baseline=None):
         "coverage_from": raw.get("coverage_from"),
         "report_from": raw.get("report_from"),
         "summary": summary,
+        "today_by_channel": {
+            ch: _metric(values, _context_gaps(coverage_gaps, [r for r in today_rows if r["channel"] in (ch, None)]))
+            for ch, values in channel_values.items()
+        },
         "sources": raw.get("sources", []),
         "open_positions": listed,
         "hidden_quote_deadlines": hidden_quote_deadlines,

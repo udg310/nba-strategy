@@ -19,14 +19,9 @@ RULES (identical to strategy.py)
   C  -5 <= m_fav < 0, same signal                                      -> buy DOG, TP+20c, 30 game-clock minutes, force Q4 6:00
   D  el>=2040, 5<=m_fav<10, entry price 0.70-0.80                      -> buy FAVOURITE, hold to settlement; if m_fav<0 after entry, sell (margin_stop)
 
-SIGNAL TIMING — evaluated on every tick, not only on score changes: the 120s
-lookback keeps moving, so a threshold can be crossed while the score sits
-still. Score-change-only evaluation missed 39% of the backtest's signals.
-
-FILLS — the conditional-token balance is the ground truth. A FAK that
-partially fills raises 400 and the order object disappears, but the shares are
-real. `done` is set only after a confirmed fill, so a failed entry stays
-retryable and a crashed worker is logged as worker_err instead of vanishing.
+FILLS — each position owns the confirmed receipts of its signed orders.
+Unknown orders survive a restart. A wallet balance can cap an order but
+cannot attribute a fill to a particular channel.
 
 COST — real exchange fee measured on-chain 2026-11-13: about 0.10*p*(1-p) per
 round trip on top of the tick spread (strategy.entry_cost / exit_cost).
@@ -37,7 +32,12 @@ Usage
 Must run under ~/.polymarket/venv/bin/python (has py_clob_client_v2).
 """
 import argparse, json, math, os, queue, sys, threading, time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_FLOOR
+from concurrent.futures import ThreadPoolExecutor
+import subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -46,7 +46,7 @@ import strategy as S
 from executor_lock import account_lock
 from live_ledger import (AttemptLedger, SUBMITTING, ACCEPTED, UNKNOWN,
                          FILLED, CLOSED, REJECTED_ZERO)
-from executor_clob import classify_post
+from executor_clob import ExpiredBeforePost, classify_post, signed_order_id
 
 POLL = 3
 
@@ -141,6 +141,12 @@ def _slot_pool(ch):
     return None, MAX_OPEN
 
 
+def _pool_full(channel, durable_keys):
+    pool, cap = _slot_pool(channel)
+    occupied = durable_keys | {(p["gid"], p["ch"]) for p in ALL_POSITIONS}
+    return sum(_slot_pool(ch)[0] == pool for _, ch in occupied) >= cap
+
+
 def _frac_of(ch):
     if ch == "L":
         return LOCK_FRAC
@@ -150,26 +156,12 @@ def _frac_of(ch):
 
 
 # ---- ownership -------------------------------------------------------------
-# One signal = one position = one order (the ledger enforces one OPEN per
-# game/channel).  A position therefore records the signal that produced it
-# (`el_in`), the order (`position_id` = attempt id) and the shares that order
-# actually bought (`fill_shares`).  `size` starts at `fill_shares`, falls as
-# the position is sold, and only grows when unmatched wallet shares are
-# adopted (`adopted`, sole-holder case only).
-#
-# A/C/D/DL buy the same DOG token and the exchange sells fungible shares, so
-# there is no "sell order X's shares" instruction -- the id decides WHICH
-# signal may sell and on what rule, the quantity decides how many leave the
-# wallet.  That quantity is the position's own `size`, never the balance,
-# which is the sum of every channel holding the token.
+# Each channel's open attempt identifies its position. Confirmed receipts
+# supply gross buys and sales. The token balance is shared across channels.
 
 
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
-SELL_WINDOW = 900
-REPOST_AFTER = 30        # seconds to wait before re-checking an unfilled sell
 MAX_SLIP = 0.03
-RETRY_GAP = 3
-DUST = 0.02              # shares; below this a position is closed for accounting
 
 TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 RUN_ID = datetime.now(timezone.utc).strftime("%H%M%S")
@@ -186,13 +178,11 @@ class DuplicateAttempt(Exception):
     """An OPEN/CLOSE attempt already exists for this game/channel."""
 
 
-class PreparedAfterPost(Exception):
-    pass
-
-
 def log(rec):
     rec = dict(rec)
     rec.setdefault("t", time.time())
+    if LEDGER is not None:
+        rec.setdefault("account", LEDGER.account)
     with LOG_LOCK:
         os.makedirs(OUTDIR, exist_ok=True)
         with open(os.path.join(OUTDIR, "events.jsonl"), "a") as f:
@@ -213,11 +203,17 @@ def load_env():
     return env
 
 
+def make_public_client():
+    from py_clob_client_v2.client import ClobClient
+    return ClobClient(host="https://clob.polymarket.com", chain_id=137)
+
+
 def make_client():
     from py_clob_client_v2.client import ClobClient
     from py_clob_client_v2.clob_types import ApiCreds
     env = load_env()
-    creds = json.load(open(os.path.expanduser("~/.polymarket/creds.json")))
+    with open(os.path.expanduser("~/.polymarket/creds.json")) as f:
+        creds = json.load(f)
     return ClobClient(host="https://clob.polymarket.com", chain_id=137,
                       key=env["POLY_PRIVATE_KEY"],
                       creds=ApiCreds(api_key=creds["api_key"],
@@ -283,7 +279,49 @@ def book(client, token):
            (b.get("tick_size") or "0.01")
 
 
-def _signed_market_order(client, token, side, amount, price_limit, tick):
+def _check_buy_deadline(deadline):
+    if deadline is None or not math.isfinite(deadline) or time.time() >= deadline:
+        raise ExpiredBeforePost("buy signal expired before submission")
+
+
+_buy_deadline = ContextVar("live_runner_buy_deadline", default=None)
+
+
+def _guard_buy_request(request):
+    deadline = _buy_deadline.get()
+    if deadline is None or request.method != "POST":
+        return
+    _check_buy_deadline(deadline)
+    previous = request.extensions.get("trace")
+
+    def trace(event, info):
+        if event.endswith(".send_request_headers.started"):
+            _check_buy_deadline(deadline)
+        if previous is not None:
+            previous(event, info)
+
+    request.extensions["trace"] = trace
+
+
+@contextmanager
+def _venue_deadline(deadline):
+    # post_order may fetch server time before it sends. Cover that fetch and
+    # the connection setup without changing timeouts or other trader threads.
+    from py_clob_client_v2.http_helpers import helpers
+    if deadline is not None:
+        with LOCK:
+            hooks = helpers._http_client.event_hooks["request"]
+            if _guard_buy_request not in hooks:
+                hooks.append(_guard_buy_request)
+    marker = _buy_deadline.set(deadline)
+    try:
+        yield
+    finally:
+        _buy_deadline.reset(marker)
+
+
+def _signed_market_order(client, token, side, amount, price_limit, tick, *,
+                         live=False, buy_ceiling=None, deadline=None):
     """Build and sign the FOK order WITHOUT posting it; return (signed, oid).
 
     The order hash is the identity the exchange's trade record uses as
@@ -291,24 +329,50 @@ def _signed_market_order(client, token, side, amount, price_limit, tick):
     POST. If the POST outcome is unclear the reconciler still knows what to
     look for.
     """
+    if not live:
+        raise PermissionError("signing requires live mode")
     from py_clob_client_v2.clob_types import (MarketOrderArgsV2, OrderType,
                                               PartialCreateOrderOptions)
-    from py_clob_client_v2.order_builder.builder import ExchangeOrderBuilderV2
-    d = 3 if float(tick or "0.01") < 0.01 else 2
+    if side == "BUY":
+        _check_buy_deadline(deadline)
+        ceiling = Decimal(str(buy_ceiling))
+        price = Decimal(str(price_limit))
+        if not (0 < price <= ceiling < 1) or price % Decimal(tick):
+            raise ValueError("BUY price outside signal limit or off tick")
+        # The SDK truncates taker shares. At the exact ceiling a 3.73 USD
+        # order at .53 would sign 7.0377 shares, or > .53 USD per share.
+        # Choose the largest cent lot whose shares fit signing precision.
+        from py_clob_client_v2.order_builder.builder import ROUNDING_CONFIG
+        cents = int(Decimal(str(amount)) * 100)
+        rounding = ROUNDING_CONFIG[tick]
+        _, maker, taker = client.builder.get_market_order_amounts(
+            "BUY", cents / 100, price_limit, rounding)
+        if maker > ceiling * taker:
+            share_step = Decimal(1).scaleb(-rounding.amount)
+            cent_lot, _ = (price * share_step * 100).as_integer_ratio()
+            cents -= cents % cent_lot
+        amount = cents / 100
+        if amount < MIN_ORDER:
+            raise ValueError("BUY below minimum at supported precision")
+    # The pinned SDK refreshes this version cache on a version-mismatch receipt.
+    version = client._ClobClient__resolve_version()
+    if version not in (2, 3):
+        raise ValueError(f"unsupported market order signing version {version}")
+    neg_risk = version == 2 and client.get_neg_risk(token)
     args = MarketOrderArgsV2(token_id=token, amount=round(amount, 2), side=side,
-                             price=round(price_limit, d), order_type=OrderType.FOK)
-    options = PartialCreateOrderOptions(tick_size=str(tick))
+                             price=price_limit, order_type=OrderType.FOK)
+    options = PartialCreateOrderOptions(tick_size=str(tick), neg_risk=neg_risk, version=version)
+    if side == "BUY":
+        _check_buy_deadline(deadline)
     signed = client.create_market_order(args, options)
-    address = getattr(getattr(client, "builder", None), "funder", None) \
-        or load_env()["POLY_FUNDER"]
-    builder = ExchangeOrderBuilderV2(address, 137, client.signer,
-                                     domain_version="2")
-    oid = builder.build_order_hash(builder.build_order_typed_data(signed))
+    if side == "BUY" and int(signed.makerAmount) > ceiling * int(signed.takerAmount):
+        raise ValueError("signed BUY exceeds signal limit")
+    oid = signed_order_id(client.signer, signed, version, neg_risk)
     return signed, oid
 
 
 def market_order(client, token, side, amount, price_limit, tick,
-                 on_prepared=None):
+                 on_prepared=None, *, live=False, buy_ceiling=None, deadline=None):
     """amount = USD for BUY, shares for SELL; price_limit caps slippage.
 
     Market BUY orders are capped by the server at 2dp for the maker (USDC)
@@ -320,22 +384,36 @@ def market_order(client, token, side, amount, price_limit, tick,
     `on_prepared(oid)` runs after signing, BEFORE `post_order`; it is where the
     attempt ledger is written. It may raise to abort the submission.
     """
+    if not live:
+        raise PermissionError("submission requires live mode")
     from py_clob_client_v2.clob_types import OrderType
+    from py_clob_client_v2.exceptions import PolyApiException
     signed, oid = _signed_market_order(client, token, side, amount,
-                                       price_limit, tick)
+                                       price_limit, tick, live=live,
+                                       buy_ceiling=buy_ceiling, deadline=deadline)
+    if side == "BUY":
+        _check_buy_deadline(deadline)
     if on_prepared is not None:
         on_prepared(oid)
-    res = client.post_order(signed, OrderType.FOK)
+    if side == "BUY":
+        _check_buy_deadline(deadline)
+    try:
+        with _venue_deadline(deadline if side == "BUY" else None):
+            res = client.post_order(signed, OrderType.FOK)
+    except PolyApiException as exc:
+        if exc.status_code != 400 or classify_post(exc.error_msg, oid)["state"] != REJECTED_ZERO:
+            raise
+        res = exc.error_msg
+    if isinstance(res, dict):
+        received = res.get("orderID") or res.get("order_id")
+        if received:
+            log({"ev": "order_receipt", "side": side, "token": token,
+                 "order_id": oid, "venue_order_id": str(received)})
     return res, oid
 
 
 def _price_step(tick):
     return 10 ** -(3 if float(tick or "0.01") < 0.01 else 2)
-
-
-def _round_up_tick(x, tick):
-    step = _price_step(tick)
-    return round(math.ceil((x - 1e-9) / step) * step, 3 if step < 0.01 else 2)
 
 
 def _round_down_tick(x, tick):
@@ -402,6 +480,7 @@ def resolve(g, client):
         except Exception:
             fav, px = None, None
         return {"outcomes": outs, "tokens": toks, "fav": fav, "slug": slug,
+                "market": mk.get("conditionId", ""),
                 "pre": dict(px).get(fav) if px and fav else None}
     return None
 
@@ -428,6 +507,27 @@ def scoreboard():
     return out
 
 
+def archived_final(gid):
+    """Recover a missing game's final from the ESPN summary for that exact ID."""
+    from urllib.parse import urlencode
+    url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?"
+    header = nd.http_json(url + urlencode({"event": gid}), timeout=8)["header"]
+    if str(header["id"]) != gid or len(header["competitions"]) != 1:
+        raise ValueError("archive game identity mismatch")
+    comp = header["competitions"][0]
+    status = comp.get("status", {})
+    if status.get("type", {}).get("state") != "post":
+        return None
+    sides = {c["homeAway"]: c for c in comp["competitors"]}
+    def score(side):
+        value = sides[side]["score"]
+        return int(value.get("value") if isinstance(value, dict) else value)
+    return dict(gid=gid, state="post", period=status["period"], detail="Final",
+                start=comp["date"], home=sides["home"]["team"]["abbreviation"],
+                away=sides["away"]["team"]["abbreviation"],
+                home_score=score("home"), away_score=score("away"))
+
+
 def outcome_abbr(res, game, abbr):
     for o in res["outcomes"]:
         if (nd.abbr_of_name(o) or "").upper() == (abbr or "").upper():
@@ -445,7 +545,7 @@ class GameTrader(threading.Thread):
         self.res = res
         self.home = home
         self.live = live
-        self.client = make_client()        # own client: no cross-thread state
+        self.client = make_client() if live else make_public_client()
         self.q = queue.Queue(maxsize=1)
         self.stop_evt = threading.Event()
         self.hist = []
@@ -453,12 +553,84 @@ class GameTrader(threading.Thread):
         self.pending = set()
         self.positions = []
         self.inflight = {}
-        self.seen_ids = set()      # trade IDs already attributed to a position
-        if LEDGER is not None:
-            # A persisted OPEN attempt means this game/channel was already
-            # sent once; never enter it again, even after a restart.
-            for row in LEDGER.open_rows(gid):
-                self.done.add(row["channel"])
+        self.final_processed = False
+        if self.live and LEDGER is not None:
+            try:
+                self._restore_orders()
+            except Exception:
+                for p in list(self.positions):
+                    self._drop(p)
+                raise
+
+    def _restore_orders(self):
+        rows = LEDGER.rows(self.gid)
+        closes = {r["channel"]: r for r in rows if r["action"] == "CLOSE"}
+        active_parents = {r["channel"] for r in rows if r["action"] == "OPEN"
+                          and r["state"] in (SUBMITTING, ACCEPTED, UNKNOWN, FILLED)}
+        for key, close in closes.items():
+            if key in active_parents or close["state"] not in (SUBMITTING, ACCEPTED, UNKNOWN):
+                continue
+            # A legacy sale with no active parent has no proven remaining allocation.
+            outcome = close["outcome"] or (self.res["fav"] if channel_spec(key)["side"] == "fav"
+                      else next(o for o in self.res["outcomes"] if o != self.res["fav"]))
+            token = self.res["tokens"][self.res["outcomes"].index(outcome)]
+            LEDGER.handoff(self.gid, key, action="CLOSE", order_id=close["order_id"],
+                           token=token, market=self.res.get("market", ""), outcome=outcome,
+                           reason="legacy_log_unverified", position_id=close["position_id"])
+            self.done.add(key)
+        for row in rows:
+            if row["action"] != "OPEN":
+                continue
+            key = row["channel"]
+            self.done.add(key)
+            if row["state"] not in (SUBMITTING, ACCEPTED, UNKNOWN, FILLED):
+                continue
+            spec = channel_spec(key)
+            outcome = row["outcome"] or (self.res["fav"] if spec["side"] == "fav"
+                      else next(o for o in self.res["outcomes"] if o != self.res["fav"]))
+            token = self.res["tokens"][self.res["outcomes"].index(outcome)]
+            market = self.res.get("market", "")
+            if (row["token"] and row["token"] != token
+                    or row["market"] and row["market"].lower() != market.lower()):
+                raise ValueError("recovered asset differs from original order")
+            close = closes.get(key)
+            if not row["identity_verified"] and close:
+                # Old production overwrote earlier CLOSE attempts. An apparently
+                # complete gross buy does not prove what remains after those sells.
+                LEDGER.handoff(self.gid, key, token=token, market=market, outcome=outcome,
+                               reason="legacy_log_unverified", action="OPEN", order_id=row["order_id"],
+                               position_id=row["attempt_id"], identity_verified=False)
+                continue
+            q = dict(ch=key, token=token, outcome=outcome, attempt_id=row["attempt_id"],
+                     market=market, order_id=row["order_id"], t0=row["signal_at"],
+                     el_sig=row["el_in"], tries=row["attempt_no"], posted=True,
+                     usd=row["reserved_usd"], style=spec["style"], tp=spec["tp"])
+            if row["state"] != FILLED or not row["identity_verified"]:
+                self.inflight[key] = q
+                if row["state"] == FILLED:
+                    q["legacy_filled"] = row["bought_size"]
+            if row["identity_verified"] and row["bought_size"] and row["entry_price"] is not None:
+                if close and close["state"] in (SUBMITTING, ACCEPTED, UNKNOWN):
+                    LEDGER.exit_intent(self.gid, key, "resume_close")
+                self._sync_position(q, row["bought_size"], row["entry_price"])
+
+    def _sync_position(self, q, shares, entry):
+        key = q["ch"]
+        net = max(0., round(shares - LEDGER.sold_size(self.gid, key), 6))
+        p = next((p for p in self.positions if p["ch"] == key), None)
+        if net <= 1e-9:
+            if p is not None:
+                self._drop(p)
+            return
+        if p is None:
+            intent = LEDGER.exit_intent(self.gid, key)
+            p = dict(gid=self.gid, ch=key, token=q["token"], outcome=q["outcome"],
+                     position_id=q["attempt_id"], t_in=q["t0"], el_in=q.get("el_sig"),
+                     style=q["style"], tp=q["tp"], selling=bool(intent), exit_reason=intent)
+            self.positions.append(p)
+            with LOCK:
+                ALL_POSITIONS.append(p)
+        p.update(size=net, entry=entry, fill_shares=shares)
 
     def put(self, snap):
         try:
@@ -473,7 +645,7 @@ class GameTrader(threading.Thread):
         self.put(None)
 
     def flat(self):
-        return not self.positions and not self.inflight
+        return self.final_processed and not self.positions and not self.inflight
 
     def run(self):
         log({"ev": "trader_start", "gid": self.gid, "fav": self.res.get("fav"),
@@ -497,6 +669,7 @@ class GameTrader(threading.Thread):
             self._find_signals(g, now)
         self._work_inflight(g, now)
         self._manage_exits(g, now)
+        self.final_processed = g["state"] == "post"
 
     # ---- state ----
     def _update_history(self, g, now):
@@ -523,7 +696,7 @@ class GameTrader(threading.Thread):
 
     # ---- entry ----
     def _find_signals(self, g, now):
-        if not self.live or len(self.hist) < 3:
+        if not self.live or g["state"] == "post" or len(self.hist) < 3:
             return
         evs = self._events(g, now)
         pre = self.res.get("pre")
@@ -572,22 +745,18 @@ class GameTrader(threading.Thread):
                 log({"ev": "signal_skip_band", "gid": self.gid, "ch": key,
                      "ask": ask, "el": sig["el"], "m": sig["margin"]})
                 continue
-            pool, cap = _slot_pool(key)
             with LOCK:
-                if pool is None:
-                    n_open = sum(1 for x in ALL_POSITIONS
-                                 if _slot_pool(x["ch"])[0] is None)
-                else:
-                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] == pool)
-            if n_open >= cap:
-                if pool is not None:
+                occupied, _, _, _ = LEDGER.exposure()
+                full = _pool_full(key, occupied)
+            if full:
+                if _slot_pool(key)[0] is not None:
                     # one lock per game: when the slots are full, skip this
                     # game rather than buy later at a higher (worse) price.
                     self.done.add(key)
                 log({"ev": "signal_skip_cap", "gid": self.gid, "ch": key})
                 continue
             bal = balance(self.client)
-            if bal is None:
+            if bal is None or bal < 2:
                 continue
             # Size off total equity (cash + open positions at cost), not cash
             # alone.  Otherwise every new position shrinks the next one, and
@@ -604,16 +773,13 @@ class GameTrader(threading.Thread):
             self.pending.add(key)
             self.inflight[key] = {"token": tok, "outcome": side_out, "ch": key,
                                   "usd": usd,
-                                  "limit": min(ask + MAX_SLIP, 0.99),
+                                  "limit": float(min(Decimal(str(ask)) + Decimal(str(MAX_SLIP)),
+                                                     Decimal("0.99"))),
                                   "deadline": now + BUY_WINDOW, "tries": 0,
                                   "style": ch["style"], "tp": ch["tp"],
                                   "ask": ask, "posted": False, "order_id": None,
                                   "el_sig": sig["el"],
-                                  # trade IDs that existed before this signal:
-                                  # anything newer is this order's fill.
-                                  "seen": self._trade_ids(tok),
-                                  "t0": int(time.time()),
-                                  "base_bal": token_balance(self.client, tok)}
+                                  "t0": int(time.time())}
             log({"ev": "signal", "gid": self.gid, "ch": key, "outcome": side_out,
                  "ask": ask, "usd": round(usd, 2), "el": sig["el"],
                  "m": sig["margin"],
@@ -630,163 +796,97 @@ class GameTrader(threading.Thread):
         except Exception:
             return []
 
-    def _trade_ids(self, token):
-        return {t.get("id") for t in self._trades(token) if t.get("id")}
-
     def _fills(self, token, side, seen, t0, order_id=None):
-        """Confirmed trades that belong to this action, not an earlier one.
+        # Used for exact attribution even when multiple channels own this token.
+        from live_reconcile import parse_order_evidence
+        fills, _ = parse_order_evidence(None, self._trades(token), order_id, token,
+                                        side, self.res.get("market", ""))
+        return [f for f in fills if f["id"] not in seen]
 
-        The token balance is deliberately not used to decide whether an order
-        filled: it lags by seconds and that lag is exactly what caused the
-        duplicate Thunder buy.  When the order response carries an orderID we
-        match the trade's taker_order_id exactly; otherwise per-action `seen`
-        IDs plus match_time separate A's fill from C's on the same token.
-        """
-        out, loose = [], []
-        for t in self._trades(token):
-            if (t.get("status") or "").upper() != "CONFIRMED":
-                continue
-            if (t.get("side") or "").upper() != side:
-                continue
-            tid = t.get("id")
-            if not tid or tid in self.seen_ids:
-                continue
-            try:
-                mt = int(t.get("match_time") or 0)
-            except Exception:
-                mt = 0
-            if order_id:
-                if str(t.get("taker_order_id") or "") == str(order_id):
-                    out.append(t)
-                elif tid not in seen and (not mt or mt >= int(t0) - 2):
-                    loose.append(t)
-            else:
-                if tid in seen:
-                    continue
-                if mt and mt < int(t0) - 2:
-                    continue
-                out.append(t)
-        if out:
-            return out
-        # If the response's orderID format ever differs from the trade's
-        # taker_order_id, accept a single unambiguous new trade rather than
-        # silently dropping the fill -- but only when nothing else on this
-        # token could have produced it.  With A/C/DL all holding the dog, one
-        # unclaimed trade on a shared token is usually the OTHER channel's,
-        # so guessing there is worse than waiting for the record.
-        if not (order_id and len(loose) == 1):
-            return []
-        oid = str(order_id)
-        others = [x for x in self.positions if x["token"] == token]
-        others += [x for x in self.inflight.values()
-                   if x["token"] == token
-                   and str(x.get("order_id") or "") != oid]
-        return loose if not others else []
-
-    def _open_position(self, q, key, shares, entry, nfills):
-        self.inflight.pop(key, None)
-        self.pending.discard(key)
-        self.done.add(key)
-        pos = {"gid": self.gid, "ch": key, "token": q["token"],
-               "outcome": q["outcome"], "entry": entry, "size": shares,
-               "t_in": time.time(), "el_in": q.get("el_sig"),
-               "position_id": q.get("attempt_id"),
-               "style": q["style"], "tp": q["tp"], "selling": False,
-               # what THIS order bought -- the anchor every sell is checked
-               # against, and the audit link back to the signal
-               "fill_shares": shares, "adopted": 0.0}
-        self.positions.append(pos)
-        with LOCK:
-            ALL_POSITIONS.append(pos)
-            first = not CONFIRMED["buy"]
-            CONFIRMED["buy"] = True
-        if LEDGER is not None and q.get("attempt_id"):
-            LEDGER.fill(q["attempt_id"], shares, entry)
-        log({"ev": "buy", "gid": self.gid, "ch": key, "outcome": q["outcome"],
-             "filled_shares": shares, "entry": entry,
-             "usd": round(shares * entry, 2), "tries": q["tries"],
-             "order_id": q.get("order_id"), "fills": nfills,
-             "attempt_id": q.get("attempt_id"),
-             "position_id": q.get("attempt_id"),
-             "el_in": q.get("el_sig")})
-        if first:
-            log({"ev": "CONFIRMED_BUY", "gid": self.gid, "ch": key,
-                 "shares": shares, "entry": entry})
+    def _log_fills(self, p, fills, side, oid):
+        for fill in fills:
+            size, price = float(fill["size"]), float(fill["price"])
+            data = (dict(filled_shares=size, entry=price, usd=size*price) if side == "buy"
+                    else dict(sold_shares=size, exit=price, reason=p.get("exit_reason")))
+            log(dict(ev=side, gid=self.gid, ch=p["ch"], outcome=p["outcome"],
+                     asset_id=p["token"], order_id=oid, fill_id=fill["id"], fills=1,
+                     position_id=p.get("position_id") or p.get("attempt_id"),
+                     attempt_id=p.get("close_attempt_id") or p.get("attempt_id"),
+                     el_in=p.get("el_in", p.get("el_sig")), **data))
+        if fills:
+            with LOCK:
+                first = not CONFIRMED[side]
+                CONFIRMED[side] = True
+            if first:
+                log(dict(ev="CONFIRMED_"+side.upper(), gid=self.gid, ch=p["ch"], order_id=oid))
 
     def _work_inflight(self, g, now):
+        from live_reconcile import order_evidence
         for key, q in list(self.inflight.items()):
-            # 1) a confirmed trade ends the signal, before any retry decision.
-            #    Nothing is checked before the order is posted: a trade that
-            #    appears then belongs to another action on this token.
-            fills = (self._fills(q["token"], "BUY", q["seen"], q["t0"],
-                                 q.get("order_id"))
-                     if q.get("posted") else [])
-            if fills:
-                shares = sum(float(t["size"]) for t in fills)
-                notional = sum(float(t["size"]) * float(t["price"]) for t in fills)
-                if shares > 0:
-                    for t in fills:
-                        if t.get("id"):
-                            q["seen"].add(t["id"])
-                            self.seen_ids.add(t["id"])
-                    self._open_position(q, key, shares, notional / shares, len(fills))
-                    continue
-
-            # 2) deadline.  If an order was posted but the trade API never
-            #    showed it, use the balance delta once -- only when no other
-            #    position shares this token, so the delta cannot be theirs.
-            if now > q["deadline"]:
-                # Only another POSTED buy on this token can move the balance
-                # behind our back.  Existing positions do not change it (and
-                # sells run on this same thread), so the delta from base_bal
-                # is exactly our fill even when A/C/DL share the token.
-                others_inflight = [x for k2, x in self.inflight.items()
-                                   if k2 != key and x["token"] == q["token"]
-                                   and x.get("posted")]
-                bal = (token_balance(self.client, q["token"])
-                       if not others_inflight else None)
-                if (q.get("posted") and bal is not None
-                        and q.get("base_bal") is not None
-                        and bal > q["base_bal"] + 1e-9):
-                    shares = bal - q["base_bal"]
-                    # Consume the trade IDs we are about to write off; they
-                    # must not be attributed to a later signal on this token.
-                    for t in self._trades(q["token"]):
-                        if ((t.get("side") or "").upper() == "BUY"
-                                and t.get("id")):
-                            self.seen_ids.add(t["id"])
-                    self._open_position(q, key, shares, q.get("ask") or 0.5, 0)
-                    continue
-                self.inflight.pop(key, None)
+            if not q["posted"] and q.get("attempt_id"):
+                # POST may have returned before the local acknowledgement write failed.
+                row = next((r for r in LEDGER.open_rows(self.gid)
+                            if r["attempt_id"] == q["attempt_id"]), None)
+                if row:
+                    q.update(posted=True, order_id=row["order_id"])
+            if g and g["state"] == "post":
+                if q["posted"]:
+                    reason = ("legacy_log_unverified" if "legacy_filled" in q else
+                              LEDGER.exit_intent(self.gid, key) or "pending_buy_at_final")
+                    LEDGER.handoff(self.gid, key, action="OPEN", order_id=q["order_id"],
+                                   token=q["token"], market=self.res.get("market", ""), outcome=q["outcome"],
+                                   reason=reason,
+                                   reserved_usd=q.get("usd") or 0, position_id=q["attempt_id"])
+                for p in list(self.positions):
+                    if p["ch"] == key:
+                        self._drop(p)
+                self.inflight.pop(key)
                 self.pending.discard(key)
-                if LEDGER is not None and q.get("attempt_id"):
-                    LEDGER.finish(q["attempt_id"], UNKNOWN)
-                log({"ev": "buy_gave_up", "gid": self.gid, "ch": key,
-                     "tries": q["tries"], "posted": q.get("posted"),
-                     "order_id": q.get("order_id"),
-                     "attempt_id": q.get("attempt_id"),
-                     "reason": q.get("last_err")})
+                self.done.add(key)
                 continue
-
-            # 3) never post a second order for the same signal.  The balance
-            #    and trade APIs can lag; a retry in that window doubles the
-            #    position (Thunder D, 2026-11-14).
             if q.get("posted"):
+                oid = q["order_id"]
+                known = LEDGER.trade_ids(oid)
+                fills, terminal = order_evidence(self.client, oid, q["token"], "BUY",
+                                                  self.res.get("market", ""), known)
+                receipts = LEDGER.record_buy_fills(oid, fills)
+                size = sum(Decimal(str(f["size"])) for f in receipts)
+                if "legacy_filled" in q:
+                    if terminal is None:
+                        continue
+                    expected = q["legacy_filled"]
+                    if not terminal or (expected is not None and abs(float(terminal) - expected) > 1e-9):
+                        LEDGER.handoff(self.gid, key, action="OPEN", order_id=oid, token=q["token"],
+                                       market=self.res.get("market", ""), outcome=q["outcome"],
+                                       reason="legacy_log_unverified", position_id=q["attempt_id"])
+                        self.inflight.pop(key)
+                        self.pending.discard(key)
+                        continue
+                    if size != terminal:
+                        continue
+                    LEDGER.record_buy_fills(oid, [], confirm_legacy=True)
+                    del q["legacy_filled"]
+                if size:
+                    cost = sum(float(f["size"]) * float(f["price"]) for f in receipts)
+                    entry = cost / float(size)
+                    self._sync_position(q, float(size), entry)
+                    self._log_fills(q, [f for f in fills if f["id"] not in known], "buy", oid)
+                if terminal is None or terminal != size:
+                    continue
+                if size:
+                    LEDGER.fill(q["attempt_id"], float(size), entry)
+                else:
+                    LEDGER.finish(q["attempt_id"], REJECTED_ZERO, oid, identity_verified=True)
+                self.done.add(key)
+                self.inflight.pop(key)
+                self.pending.discard(key)
+                continue
+            if now > q["deadline"]:
+                self.inflight.pop(key)
+                self.pending.discard(key)
+                log(dict(ev="buy_gave_up", gid=self.gid, ch=key, posted=False))
                 continue
 
-            with LOCK:
-                # Locks (L, DL) each have their own slot pool; A/C/D must not
-                # be crowded out by them (and vice versa).  The signal-time
-                # check above uses the same split, so keep it consistent here.
-                pool, cap = _slot_pool(q.get("ch"))
-                if pool is None:
-                    n_open = sum(1 for x in ALL_POSITIONS
-                                 if _slot_pool(x["ch"])[0] is None)
-                else:
-                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] == pool)
-                if n_open >= cap:
-                    q["last_err"] = "open cap"
-                    continue
             q["tries"] += 1
             status, info = self._post_buy(q)
             if status == "posted":
@@ -812,34 +912,54 @@ class GameTrader(threading.Thread):
                      "err": info.get("err"), "order_id": q["order_id"]})
 
     def _post_buy(self, q):
+        if not self.live:
+            return "rejected", {"err": "dry run"}
         ask, _, tick = book(self.client, q["token"])
         if ask is None:
             return "rejected", {"err": "no_ask"}
-        if ask > q["limit"] + 1e-9:
-            return "rejected", {"err": f"ask {ask:.3f} > {q['limit']:.3f}"}
-        # Force 0.01 for BUY market orders (see market_order docstring).
-        btick = "0.01" if float(tick or "0.01") < 0.01 else str(tick)
-        limit = min(_round_up_tick(ask + MAX_SLIP, btick), 0.99)
-        if limit < ask:
+        best = Decimal(str(ask))
+        step = max(Decimal(str(tick or "0.01")), Decimal("0.01"))
+        cap = min(Decimal(str(q["limit"])), best + Decimal(str(MAX_SLIP)), 1 - step)
+        limit = float((cap / step).to_integral_value(rounding=ROUND_FLOOR) * step)
+        if Decimal(str(limit)) < best:
             return "rejected", {"err": f"limit {limit:.3f} < ask {ask:.3f}"}
         prepared = {}
 
         def on_prepared(oid):
             # Runs after signing and BEFORE the POST.  The ledger row is the
             # one-in-flight gate: if it already exists, abort the submission.
-            prepared["oid"] = oid
-            q["order_id"] = oid
-            if LEDGER is not None:
+            with LOCK:
+                cash = balance(self.client)
+                if cash is None or cash < 2:
+                    raise ValueError("cash unknown" if cash is None else "cash below minimum")
+                keys, reserved, unknown, _basis = LEDGER.exposure()
+                if (self.gid, q["ch"]) in keys:
+                    raise DuplicateAttempt
+                if _pool_full(q["ch"], keys):
+                    raise ValueError("open cap")
+                available = max(0., cash - reserved) * (1 - CASH_RESERVE)
+                if unknown or q["usd"] > available:
+                    raise ValueError("insufficient unreserved cash")
+                _check_buy_deadline(q["deadline"])
                 aid, ok = LEDGER.begin(self.gid, q["ch"], "OPEN", oid,
-                                       int(time.time()), el_in=q.get("el_sig"))
+                                       int(time.time()), el_in=q.get("el_sig"),
+                                       reserved_usd=q["usd"], token=q["token"],
+                                       market=self.res.get("market", ""), outcome=q["outcome"])
                 if not ok:
                     raise DuplicateAttempt
                 prepared["aid"] = aid
                 q["attempt_id"] = aid
+                prepared["oid"] = oid
+                q["order_id"] = oid
 
         try:
             res, oid = market_order(self.client, q["token"], "BUY",
-                                    q["usd"], limit, btick, on_prepared)
+                                    q["usd"], limit, str(step), on_prepared,
+                                    live=self.live, buy_ceiling=cap, deadline=q["deadline"])
+        except ExpiredBeforePost as e:
+            if prepared.get("aid"):
+                LEDGER.finish(prepared["aid"], REJECTED_ZERO, prepared["oid"])
+            return "rejected", {"err": str(e)}
         except DuplicateAttempt:
             q["last_err"] = "duplicate OPEN"
             q["deadline"] = 0
@@ -877,275 +997,98 @@ class GameTrader(threading.Thread):
 
     # ---- exit ----
     def _manage_exits(self, g, now):
+        if not self.live:
+            return
+        final = g["state"] == "post"
+        elapsed = nd.elapsed_of(g["period"], g["detail"])
         for p in list(self.positions):
-            if p["style"] != "process":
-                if p.get("selling"):
-                    continue
-                # D thesis: favourite leading 5-10.  If the lead turns
-                # negative, the thesis is broken: exit at the market rather
-                # than riding a -100% settlement.  This is a margin stop,
-                # not a price stop.  DL is the mirror image: its thesis is a
-                # dog leading 12+, so it exits when that lead collapses
-                # (`stop_margin_hi`, applied to the favourite margin).
-                try:
-                    spec = channel_spec(p["ch"])
-                except KeyError:      # a resumed row with an unknown channel
-                    spec = {}
-                stop = spec.get("stop_margin")
-                stop_hi = spec.get("stop_margin_hi")
-                if ((stop is not None or stop_hi is not None) and self.hist
-                        and g["state"] != "post"):
-                    m_now = self.hist[-1][2]
-                    if ((stop is not None and m_now < stop)
-                            or (stop_hi is not None and m_now > stop_hi)):
-                        p["selling"] = True
-                        p["exit_reason"] = "margin_stop"
-                        _, bid, _ = book(self.client, p["token"])
-                        log({"ev": "exit", "gid": self.gid, "ch": p["ch"],
-                             "outcome": p["outcome"], "reason": "margin_stop",
-                             "bid": bid, "entry": p["entry"],
-                             "size": p["size"], "m_fav": m_now})
-                        self._sell(p, finished=(g["state"] == "post"))
-                        continue
-                if g["state"] == "post":
-                    log({"ev": "settle_hold", "gid": self.gid, "ch": p["ch"],
-                         "outcome": p["outcome"], "entry": p["entry"],
-                         "size": p["size"], "note": "held to resolution"})
-                    self._drop(p)
-                continue
-            if p.get("selling"):
-                continue
-            if p["size"] < DUST:
-                log({"ev": "reconcile_closed", "gid": self.gid, "ch": p["ch"],
-                     "outcome": p["outcome"], "why": "dust", "size": p["size"]})
-                self._drop(p)
-                continue
-            el = nd.elapsed_of(g["period"], g["detail"])
-            finished = (g["state"] == "post") or (el is not None and el >= 2880)
-            held = token_balance(self.client, p["token"])
-            if held is not None and held < DUST:
-                # The balance API lags right after a buy; require 30s of
-                # consistently zero shares before declaring the position gone.
-                if p.get("zero_since") is None:
-                    p["zero_since"] = now
-                    continue
-                if now - p["zero_since"] >= 30:
-                    log({"ev": "reconcile_closed", "gid": self.gid, "ch": p["ch"],
-                         "outcome": p["outcome"], "why": "balance gone",
-                         "held": held, "size": p["size"]})
-                    self._drop(p)
-                    continue
-            else:
-                p.pop("zero_since", None)
-            # A missed fill (e.g. an earlier POST whose trade record was not
-            # attributed) shows up as token shares we do not account for.
-            # Add the excess to this position so it is sold/managed instead
-            # of sitting invisible in the wallet.
-            ours = sum(x["size"] for x in self.positions
-                       if x["token"] == p["token"])
-            # A/C share the dog token.  If another channel's BUY is still in
-            # flight (posted but its trade record has not landed yet), the
-            # excess shares belong to that order, not to this position --
-            # folding them in here is what let C swallow A's fills.  Only
-            # reconcile shares that no pending order can explain.
-            pending_same = any(q["token"] == p["token"]
-                               for q in self.inflight.values())
-            if held is not None and held > ours + DUST and not pending_same:
-                extra = held - ours
-                # Shares whose own order record never arrived.  Only fold them
-                # in when this position is the sole holder of the token; with
-                # A/C/DL all on the dog, an unattributed lot is far more
-                # likely to belong to another channel than to this one.
-                siblings = [x for x in self.positions
-                            if x["token"] == p["token"] and x is not p]
-                if siblings:
-                    if not p.get("_excess_logged"):
-                        p["_excess_logged"] = True
-                        log({"ev": "unattributed_excess", "gid": self.gid,
-                             "ch": p["ch"], "held": held,
-                             "accounted": round(ours, 6),
-                             "extra": round(extra, 6),
-                             "holders": [x["ch"] for x in siblings]})
+            key = p["ch"]
+            spec = channel_spec(key)
+            reason = p.get("exit_reason") or LEDGER.exit_intent(self.gid, key)
+            if not reason and p["style"] == "process":
+                if final or (elapsed is not None and elapsed >= S.FORCE_EL):
+                    reason = "force"
+                elif (spec.get("game_hold") and elapsed is not None and p.get("el_in") is not None
+                      and elapsed - p["el_in"] >= spec["game_hold"]):
+                    reason = "time"
                 else:
-                    p["size"] += extra
-                    p["adopted"] = (p.get("adopted") or 0.0) + extra
-                    log({"ev": "reconcile_add", "gid": self.gid, "ch": p["ch"],
-                         "outcome": p["outcome"], "held": held,
-                         "accounted": round(ours, 6),
-                         "extra": round(extra, 6),
-                         "size": round(p["size"], 6),
-                         "fill_shares": round(p.get("fill_shares") or 0, 6)})
-            _, bid, _ = book(self.client, p["token"])
-            if bid is None and finished:
-                log({"ev": "no_exit", "gid": self.gid, "ch": p["ch"],
-                     "outcome": p["outcome"], "size": p["size"],
-                     "note": "final, no bid"})
+                    _, bid, _ = book(self.client, p["token"])
+                    if bid is not None and bid - S.exit_cost(bid) >= p["entry"] + p["tp"]:
+                        reason = "target"
+            elif not reason and not final and self.hist:
+                margin = self.hist[-1][2]
+                if ((spec.get("stop_margin") is not None and margin < spec["stop_margin"])
+                        or (spec.get("stop_margin_hi") is not None and margin > spec["stop_margin_hi"])):
+                    reason = "margin_stop"
+            if reason:
+                if not p.get("selling"):
+                    log(dict(ev="exit", gid=self.gid, ch=key, outcome=p["outcome"],
+                             reason=reason, size=p["size"], entry=p["entry"]))
+                p.update(selling=True, exit_reason=reason)
+                self._sell(p, finished=final)
+            if final and p in self.positions:
+                LEDGER.handoff(self.gid, key, token=p["token"], market=self.res.get("market", ""),
+                               outcome=p["outcome"], reason=reason or "settle_hold",
+                               size=p["size"], entry=p["entry"], position_id=p["position_id"])
+                log(dict(ev="account_handoff", gid=self.gid, ch=key, size=p["size"],
+                         reason=reason or "settle_hold", position_id=p["position_id"]))
                 self._drop(p)
-                continue
-            if bid is None and not finished:
-                continue
-            reason = None
-            game_hold = S.CHANNELS[p["ch"]].get("game_hold")
-            if bid is not None and (bid - S.exit_cost(bid)) >= p["entry"] + p["tp"]:
-                reason = "target"
-            elif (game_hold and p.get("el_in") is not None and el is not None
-                  and el - p["el_in"] >= game_hold):
-                reason = "time"
-            elif finished or (el is not None and el >= S.FORCE_EL):
-                reason = "force"
-            if reason is None:
-                continue
-            p["selling"] = True
-            p["exit_reason"] = reason
-            log({"ev": "exit", "gid": self.gid, "ch": p["ch"], "reason": reason,
-                 "bid": bid, "entry": p["entry"], "size": p["size"]})
-            self._sell(p, finished=finished)
 
     def _sell(self, p, finished=False):
-        """Sell THIS position's shares only.
-
-        The token balance may be shared by A and C; selling floor(balance)
-        would liquidate the other channel too.  We post the position's own
-        size, and confirm from the trade record.  A full sell leaves < 0.01
-        share of dust (size precision is 2dp), which is treated as closed
-        instead of retrying for 15 minutes.
-        """
-        deadline = time.time() + SELL_WINDOW
-        seen = self._trade_ids(p["token"])
-        t0 = int(time.time())
-        last = "no_attempt"
-        posted = False
-        posted_at = 0.0
-        posted_unknown = False
-        order_id = None
-        while time.time() < deadline and not self.stop_evt.is_set():
-            fills = self._fills(p["token"], "SELL", seen, t0,
-                                order_id if posted else None)
-            if fills:
-                sold = sum(float(t["size"]) for t in fills)
-                notional = sum(float(t["size"]) * float(t["price"]) for t in fills)
-                px = notional / sold if sold else None
-                for t in fills:
-                    if t.get("id"):
-                        seen.add(t["id"])
-                        self.seen_ids.add(t["id"])
-                p["size"] = max(0.0, p["size"] - sold)
-                with LOCK:
-                    first = not CONFIRMED["sell"]
-                    CONFIRMED["sell"] = True
-                log({"ev": "sell", "gid": self.gid, "ch": p["ch"],
-                     "outcome": p["outcome"], "reason": p.get("exit_reason"),
-                     "sold_shares": sold, "exit": px,
-                     "remaining": round(p["size"], 6), "fills": len(fills),
-                     "order_id": order_id,
-                     "position_id": p.get("position_id"),
-                     "el_in": p.get("el_in")})
-                if first:
-                    log({"ev": "CONFIRMED_SELL", "gid": self.gid, "ch": p["ch"],
-                         "sold_shares": sold, "exit": px})
-                self._close_attempt(p)
-                if p["size"] < DUST:
-                    self._drop(p)
-                    return
-                posted = False
-                posted_unknown = False
-                order_id = None
-                t0 = int(time.time())
-                continue
-
-            # A posted order is in flight: wait for its trade record.  For an
-            # ambiguous (timeout) post, after 30s re-check the balance; if the
-            # shares are still there, the order did not execute and a retry is
-            # safe.  A second sell of already-sold shares would be rejected by
-            # the exchange anyway, so this cannot double the position.
-            if posted:
-                # A FOK that cannot fill (thin book at the limit, or the bid
-                # moved between the exit and the post) is killed on arrival yet
-                # still reports "posted".  Waiting out the full SELL_WINDOW on
-                # it freezes the position -- and blocks _manage_exits via
-                # p["selling"] -- while the price runs away.  After 30s check
-                # the shares again; if they are still ours the order did not
-                # fill, so repost at the new bid.  Selling already-sold shares
-                # would be rejected by the exchange, so this cannot double.
-                if time.time() - posted_at > REPOST_AFTER:
-                    # A/C/D/DL can share one token (all three dog channels buy
-                    # the DOG).  The token balance is then the sum of every
-                    # holder's shares, so "bal >= p.size" would be true even
-                    # after OUR shares sold -- reposting there would sell
-                    # another channel's position.  Compare against what the
-                    # other positions on this token account for instead: any
-                    # excess over that is still ours.  DL's margin stop fires
-                    # exactly when A/C may still be open, so this path matters.
-                    same = [x for x in self.positions
-                            if x["token"] == p["token"] and x is not p]
-                    others = sum(x["size"] for x in same)
-                    bal = token_balance(self.client, p["token"])
-                    if bal is not None and bal - others >= p["size"] - DUST:
-                        posted = False
-                        posted_unknown = False
-                        order_id = None
-                        last = "no fill after 30s"
-                time.sleep(RETRY_GAP)
-                continue
-
+        """Advance one sale without sleeping or abandoning the signed order."""
+        from live_reconcile import order_evidence
+        if not self.live or LEDGER is None:
+            return
+        key = p["ch"]
+        LEDGER.exit_intent(self.gid, key, p.get("exit_reason") or "resume_close")
+        row = next((r for r in LEDGER.rows(self.gid) if r["action"] == "CLOSE"
+                    and r["channel"] == key and r["state"] in (SUBMITTING, ACCEPTED, UNKNOWN)), None)
+        if row is None:
             status, info = self._post_sell(p)
-            if status in ("posted", "unknown"):
-                posted = True
-                posted_at = time.time()
-                posted_unknown = (status == "unknown")
-                order_id = info.get("order_id")
-                last = (f"{status} {info.get('size')}@{info.get('bid')} "
-                        f"{info.get('order_id')}")
-            else:
-                last = info.get("err")
-            time.sleep(RETRY_GAP)
-        p["selling"] = False
-        self._close_attempt(p)
-        if p["size"] < DUST:
+            if status not in ("posted", "unknown"):
+                return
+            row = next((r for r in LEDGER.rows(self.gid)
+                        if r["action"] == "CLOSE" and r["channel"] == key
+                        and r["order_id"] == info["order_id"]), None)
+            if row is None:
+                return
+        oid = row["order_id"]
+        p["close_attempt_id"] = row["attempt_id"]
+        receipts, terminal = order_evidence(self.client, oid, p["token"], "SELL",
+                                            self.res.get("market", ""), LEDGER.trade_ids(oid))
+        added = LEDGER.record_sell_fills(oid, receipts)
+        # Even an interrupted write-to-memory transition is reconstructed by owner.
+        gross = p.get("fill_shares")
+        if gross is not None:
+            p["size"] = max(0., round(gross - LEDGER.sold_size(self.gid, key), 6))
+        self._log_fills(p, added, "sell", oid)
+        if terminal == 0:
+            LEDGER.finish(row["attempt_id"], REJECTED_ZERO, oid, identity_verified=True)
+        elif terminal is not None:
+            LEDGER.finish_sell_order(row["attempt_id"], oid, terminal)
+        if p["size"] <= 1e-9:
             self._drop(p)
-            return
-        # Unsellable positions must not retry forever.  A collapsed bid (no_bid
-        # / below the min tick) or an empty balance can never be sold, and once
-        # the game is final there is no bid at all.  Close them at zero so the
-        # trader reaches flat and day_over can fire instead of blocking until
-        # RuntimeMaxSec.
-        last_s = str(last)
-        if finished or last_s.startswith("qty 0"):
-            log({"ev": "reconcile_closed", "gid": self.gid, "ch": p["ch"],
-                 "outcome": p["outcome"],
-                 "why": "balance gone" if last_s.startswith("qty 0")
-                        else "game over, unsellable",
-                 "size": round(p["size"], 6), "last": last})
-            self._drop(p)
-            return
-        log({"ev": "sell_gave_up", "gid": self.gid, "ch": p["ch"],
-             "outcome": p["outcome"], "reason": p.get("exit_reason"),
-             "remaining": round(p["size"], 6), "last": last})
-
-    def _close_attempt(self, p):
-        if LEDGER is not None and p.get("close_attempt_id"):
-            LEDGER.close(p["close_attempt_id"])
-            p.pop("close_attempt_id", None)
 
     def _post_sell(self, p):
+        if not self.live:
+            return "rejected", {"err": "dry run"}
+        if LEDGER is None:
+            return "rejected", {"err": "live ledger unavailable"}
         bal = token_balance(self.client, p["token"])
-        # Check the position still owns what it is about to sell: the shares
-        # this signal's order bought, plus anything the wallet proved was ours
-        # (`adopted`).  Anything beyond that is unaccounted for and gets said
-        # out loud rather than silently sold as if it were this signal's.
+        # The channel owns its confirmed buys minus its confirmed sales.
         fill = p.get("fill_shares")
         if fill is not None:
-            backed = fill + (p.get("adopted") or 0.0)
-            if p["size"] > backed + DUST:
+            backed = fill - LEDGER.sold_size(self.gid, p["ch"])
+            if p["size"] > backed + 1e-9:
                 log({"ev": "size_unbacked", "gid": self.gid, "ch": p["ch"],
                      "size": round(p["size"], 6),
                      "fill_shares": round(fill, 6),
-                     "adopted": round(p.get("adopted") or 0.0, 6),
                      "position_id": p.get("position_id"),
                      "el_in": p.get("el_in")})
+                return "rejected", {"err": "size exceeds confirmed holding"}
         # Size the sell from THIS position, never from the wallet balance:
         # the balance is shared with any other channel holding this token.
-        qty = math.floor(p["size"] * 100) / 100
+        qty = float(Decimal(str(p["size"])).quantize(Decimal("0.01"), rounding=ROUND_FLOOR))
         if bal is not None and bal < qty:
             # the wallet cannot back our own position -- either another
             # channel already sold or the record is stale.  Never sell more
@@ -1153,7 +1096,7 @@ class GameTrader(threading.Thread):
             log({"ev": "sell_qty_clamped", "gid": self.gid, "ch": p["ch"],
                  "own": round(qty, 6), "bal": round(bal, 6),
                  "order_id": p.get("position_id")})
-            qty = math.floor(bal * 100) / 100
+            qty = float(Decimal(str(bal)).quantize(Decimal("0.01"), rounding=ROUND_FLOOR))
         if qty <= 0:
             return "rejected", {"err": f"qty {qty} bal {bal}"}
         _, bid, tick = book(self.client, p["token"])
@@ -1164,28 +1107,30 @@ class GameTrader(threading.Thread):
         prepared = {}
 
         def on_prepared(oid):
-            prepared["oid"] = oid
-            p["order_id"] = oid
             if LEDGER is not None:
                 aid, ok = LEDGER.begin(self.gid, p["ch"], "CLOSE", oid,
                                        int(time.time()), el_in=p.get("el_in"),
-                                       position_id=p.get("position_id", ""))
+                                       position_id=p.get("position_id", ""),
+                                       requested_size=qty, token=p["token"],
+                                       outcome=p["outcome"], market=self.res.get("market", ""))
                 if not ok:
                     raise DuplicateAttempt
                 prepared["aid"] = aid
                 p["close_attempt_id"] = aid
+            prepared["oid"] = oid
 
         try:
             res, oid = market_order(self.client, p["token"], "SELL", qty,
-                                    limit, tick, on_prepared)
+                                    limit, tick, on_prepared, live=self.live)
         except DuplicateAttempt:
             row = next((r for r in (LEDGER.rows(self.gid) if LEDGER else [])
                         if r["channel"] == p["ch"] and r["action"] == "CLOSE"),
                        None)
-            if row:
+            if row and row["state"] in (SUBMITTING, UNKNOWN, ACCEPTED) and row["position_id"] == p.get("position_id"):
                 p["close_attempt_id"] = row["attempt_id"]
-            return "posted", {"err": "duplicate CLOSE", "size": qty, "bid": bid,
-                              "order_id": row["order_id"] if row else None}
+                return "posted", {"err": "awaiting original CLOSE", "size": qty, "bid": bid,
+                                  "order_id": row["order_id"]}
+            return "rejected", {"err": "CLOSE has no available confirmed shares"}
         except Exception as e:
             if prepared.get("aid") and LEDGER is not None:
                 LEDGER.finish(prepared["aid"], UNKNOWN)
@@ -1221,12 +1166,7 @@ class GameTrader(threading.Thread):
 
 # ------------------------------------------------------------------ resume
 def resume_plan():
-    """Fills already logged today: channel done marks + open positions.
-
-    A buy is not necessarily still open: an earlier run may have sold it.
-    Rebuild each position as bought - sold, so a restart does not resurrect
-    a closed position (the old code only looked at buys).
-    """
+    """Recent historical log claims for review; SQLite owns tradable inventory."""
     pos, done = {}, set()
     # Read yesterday as well as today.  A session that began before UTC
     # midnight and was restarted after it used to find an empty directory,
@@ -1255,6 +1195,9 @@ def resume_plan():
                 r = json.loads(line)
             except Exception:
                 continue
+            if (LEDGER and r.get("account")
+                    and str(r["account"]).casefold() != LEDGER.account.casefold()):
+                continue
             ev = r.get("ev")
             if ev == "buy" and r.get("filled_shares"):
                 k = (r.get("gid"), r.get("ch"), r.get("outcome"))
@@ -1279,34 +1222,12 @@ def resume_plan():
                         pos[k]["sold"] += float(r.get("sold_shares") or 0)
                     except Exception:
                         pass
-            elif ev in ("reconcile_closed", "no_exit", "settle_hold"):
-                k = (r.get("gid"), r.get("ch"), r.get("outcome"))
-                if k not in pos:
-                    cand = [kk for kk in pos
-                            if kk[0] == r.get("gid") and kk[1] == r.get("ch")]
-                    if len(cand) == 1:
-                        k = cand[0]
-                if k in pos:
-                    pos[k]["sold"] = pos[k]["size"]
-    # Durable attempts catch a buy that was submitted before the process
-    # died and never reached the event log.  The channel is marked done so
-    # it cannot be entered again; the position is restored from the token
-    # balance / order's trade record in the main loop.
-    if LEDGER is not None:
-        for row in LEDGER.open_rows():
-            k = (row["game_id"], row["channel"], None)
-            if k in pos:
-                continue
-            pos[k] = {"entry": None, "size": 0.0, "sold": 0.0,
-                      "t_in": row["signal_at"], "el_in": row["el_in"],
-                      "order_id": row["order_id"],
-                      "attempt_id": row["attempt_id"],
-                      "position_id": row["position_id"]}
-            done.add((row["game_id"], row["channel"]))
+    # Historical logs supply hints for review only. A signed OPEN owns the
+    # tradeable quantity; the caller never uses a log value to place a sell.
     open_pos = {}
     for k, v in pos.items():
         rem = v["size"] - v["sold"]
-        if rem > DUST or (v.get("attempt_id") and v.get("order_id")):
+        if rem > 1e-9:
             open_pos[k] = (v["entry"], rem, v.get("t_in"), v.get("el_in"),
                            v.get("order_id"), v.get("attempt_id"),
                            v.get("position_id"))
@@ -1331,7 +1252,7 @@ def _live_run():
     global LEDGER
     funder = load_env()["POLY_FUNDER"]
     db = os.path.join(ROOT, "var", "live_runner", "attempts.db")
-    LEDGER = AttemptLedger(db, funder)
+    LEDGER = AttemptLedger(db, funder, recover=False)
     recovered = LEDGER.recover()
     log({"ev": "ledger", "db": db, "recovered": recovered})
     try:
@@ -1351,6 +1272,8 @@ def start_board():
         cmd = [_sys.executable, "-I", os.path.join(ROOT, "scripts", "team_dashboard.py"),
                "--runner", os.path.join(ROOT, "data", "live_trade_final"),
                "--host", BOARD_HOST, "--port", str(BOARD_PORT)]
+        if LEDGER is not None:
+            cmd += ["--account", LEDGER.account]
         if BOARD_AUTH:
             cmd += ["--auth", BOARD_AUTH]
         if BOARD_HOST not in ("127.0.0.1", "localhost") and not BOARD_AUTH:
@@ -1364,9 +1287,26 @@ def start_board():
 
 
 def run(live):
-    client = make_client()
-    bal = balance(client)
-    log({"ev": "start", "live": live, "balance": bal, "stake_frac": STAKE_FRAC,
+    global OUTDIR
+    if live:
+        return _run(live=True)
+    previous = OUTDIR
+    OUTDIR = os.path.join(ROOT, "data", "dry_run", TODAY, RUN_ID)
+    try:
+        return _run(live=False)
+    finally:
+        OUTDIR = previous
+
+
+def _run(live):
+    client = make_client() if live else make_public_client()
+    bal = balance(client) if live else None
+    try:
+        revision = subprocess.check_output(["git", "-C", ROOT, "rev-parse", "--verify", "HEAD"],
+                                           stderr=subprocess.DEVNULL, text=True, timeout=3).strip()
+    except (OSError, subprocess.SubprocessError):
+        revision = None
+    log({"ev": "start", "live": live, "git_sha": revision, "balance": bal, "stake_frac": STAKE_FRAC,
          "stake_now": {k: round((bal or 0) * STAKE_FRAC * w, 2)
                        for k, w in (("A", 1.0), ("C", 1.0), ("D", 2.0))},
          "max_open": MAX_OPEN, "outdir": OUTDIR,
@@ -1375,165 +1315,204 @@ def run(live):
                      "margin": DOGLOCK_MARGIN, "min_el": DOGLOCK_MIN_EL,
                      "price": [DOGLOCK_PRICE_MIN, DOGLOCK_PRICE_MAX],
                      "stop_lead": DOGLOCK_STOP_LEAD}})
-    if live and (bal or 0) < 2.0:
+    filled, done = resume_plan() if live else ({}, set())
+    rows = LEDGER.rows() if live and LEDGER is not None else []
+    active = [r for r in rows if r["state"] in (SUBMITTING, ACCEPTED, UNKNOWN)
+              or (r["state"] == FILLED and r["action"] == "OPEN")]
+    owned = {(r["game_id"], r["channel"]) for r in rows}
+    reviewed = {(r["game_id"], r["channel"]) for r in LEDGER.tasks(False)} if live and LEDGER else set()
+    missing_claims = {k[:2] for k in filled} - owned - reviewed
+    recovery = {row["game_id"] for row in active} | {gid for gid, _ in missing_claims}
+    pending = bool(live and LEDGER and LEDGER.tasks())
+    if live and bal is not None and bal < 2 and not recovery and not pending:
         log({"ev": "abort", "why": "balance too low", "balance": bal})
         return
-
-    start_board()
-    filled, _done = resume_plan()
-    resumed = set()
+    if live:
+        start_board()
     traders = {}
-    saw_live = False
-    tick = 0
-
-    while True:
-        tick += 1
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="recovery") as pool:
         try:
-            games = scoreboard()
-        except Exception as e:
-            log({"ev": "espn_err", "err": str(e)[:120]})
-            time.sleep(8)
-            continue
-        now = time.time()
-        live_games = [g for g in games if g["state"] == "in"]
-        if live_games:
-            saw_live = True
-
-        # ---- spawn one trader per live game, then hand it the snapshot ----
-        for g in live_games:
-            t = traders.get(g["gid"])
-            if t is None:
-                res = resolve(g, client)
-                if not res or not res.get("fav"):
-                    continue
-                t = GameTrader(g["gid"], res, g["home"], live)
-                # Group by token: A and C can hold the same outcome.  The
-                # recorded sizes split the token balance; handing the whole
-                # balance to each channel would double-count it.
-                by_tok = {}
-                for (gid, ch, outcome), (entry, size, t_in, el_in,
-                                          order_id, attempt_id, position_id) \
-                        in list(filled.items()):
-                    if gid != g["gid"]:
-                        continue
-                    t.done.add(ch)                 # that channel already filled
-                    if (gid, ch) in resumed:
-                        continue
-                    if outcome is None:
-                        # Attempt rows do not carry the outcome; derive it
-                        # from the channel side and the resolved market.
-                        outcome = res["fav"] if channel_spec(ch)["side"] == "fav" \
-                            else next(o for o in res["outcomes"] if o != res["fav"])
-                    if outcome not in res["outcomes"]:
-                        continue
-                    tok = res["tokens"][res["outcomes"].index(outcome)]
-                    by_tok.setdefault(tok, []).append(
-                        (ch, outcome, entry, size, t_in, el_in,
-                         order_id, attempt_id, position_id))
-                for tok, items in by_tok.items():
-                    held = token_balance(client, tok)
-                    if held is None:
-                        held = sum(x[3] for x in items)
-                    if held is None or held < DUST:
-                        continue
-                    ev_sizes = sum(x[3] for x in items if x[3] > 0)
-                    total = ev_sizes
-                    scale = held / total if total > 0 else 1.0
-                    remaining = max(0.0, held - ev_sizes)
-                    for ch, outcome, entry, size, t_in, el_in, order_id, \
-                            attempt_id, position_id in items:
-                        need = size
-                        # An attempt with no recorded event size: take the
-                        # size the ledger wrote when it filled, rather than
-                        # handing it whatever balance is left over.
-                        if need <= 0 and attempt_id and LEDGER is not None:
-                            led_shares, led_px = LEDGER.filled_of(attempt_id)
-                            if led_shares and led_shares > DUST:
-                                need = led_shares
-                                if (entry is None or entry <= 0) and led_px:
-                                    entry = led_px
-                        if need <= 0 and remaining > DUST:
-                            alloc = remaining
-                            remaining = 0.0
-                        else:
-                            alloc = (need * scale) if need > 0 else 0.0
-                        if alloc < DUST:
-                            continue
-                        # An attempt without an event has no entry price;
-                        # recover it from the order's confirmed trade.
-                        if (entry is None or entry <= 0) and order_id:
-                            try:
-                                from py_clob_client_v2.clob_types import TradeParams
-                                for tr in client.get_trades(
-                                        TradeParams(asset_id=tok)) or []:
-                                    if str(tr.get("taker_order_id") or "") == str(order_id) \
-                                            and (tr.get("status") or "").upper() == "CONFIRMED":
-                                        entry = float(tr["price"])
-                                        break
-                            except Exception:
-                                pass
-                        pos = {"gid": g["gid"], "ch": ch, "token": tok,
-                               "outcome": outcome, "entry": entry or 0.5,
-                               "size": alloc, "t_in": t_in or time.time(),
-                               "el_in": el_in,
-                               "position_id": position_id or attempt_id,
-                               "style": channel_spec(ch)["style"],
-                               "tp": channel_spec(ch)["tp"], "selling": False,
-                               "fill_shares": alloc, "adopted": 0.0}
-                        t.positions.append(pos)
-                        with LOCK:
-                            ALL_POSITIONS.append(pos)
-                        if LEDGER is not None and attempt_id:
-                            LEDGER.fill(attempt_id, alloc, entry or 0.5)
-                        resumed.add((g["gid"], ch))
-                        log({"ev": "resume_position", "gid": g["gid"], "ch": ch,
-                             "outcome": outcome, "entry": pos["entry"],
-                             "size": alloc, "held": held, "recorded": size,
-                             "el_in": el_in, "attempt_id": attempt_id,
-                             "position_id": pos["position_id"]})
-                t.start()
-                traders[g["gid"]] = t
-            t.put(g)
-
-        # ---- release a trader once its game is final and it holds nothing ----
-        for gid, t in list(traders.items()):
-            g = next((x for x in games if x["gid"] == gid), None)
-            if g is None or g["state"] != "post":
-                continue
-            t.put(g)                       # last snapshot: lets it force-exit
-            time.sleep(0.3)
-            if t.flat():
+            _poll_games(live, client, traders, pool, recovery, filled, done, pending)
+        finally:
+            for t in traders.values():
                 t.stop()
-                t.join(timeout=45)
-                traders.pop(gid, None)
-                log({"ev": "trader_released", "gid": gid,
-                     "remaining": len(traders)})
-
-        if tick % 100 == 0:
-            b = balance(client)
-            with LOCK:
-                snap = [(p["gid"], p["ch"], p["outcome"], p["entry"], p["size"])
-                        for p in ALL_POSITIONS]
-            log({"ev": "heartbeat", "balance": round(b, 2) if b else None,
-                 "open": len(snap), "traders": len(traders),
-                 "positions": snap, "confirmed": dict(CONFIRMED)})
-
-        pending_games = [x for x in games if x["state"] in ("pre", "in")]
-        if saw_live and games and not pending_games and not traders:
-            log({"ev": "day_over", "games": len(games)})
-            break
-        time.sleep(POLL)
-
-    for gid, t in list(traders.items()):
-        t.stop()
-        t.join(timeout=30)
-    log({"ev": "stopped", "open": len(ALL_POSITIONS), "balance": balance(client),
+            for t in traders.values():
+                t.join()
+    log({"ev": "stopped", "open": len(ALL_POSITIONS), "balance": balance(client) if live else None,
          "traders": len(traders), "confirmed_buy": CONFIRMED["buy"],
          "confirmed_sell": CONFIRMED["sell"]})
     if not CONFIRMED["buy"]:
         log({"ev": "WARN", "msg": "no real fill observed this session"})
     elif not CONFIRMED["sell"]:
         log({"ev": "WARN", "msg": "a fill happened but no exit was confirmed"})
+
+
+def _account_sweep():
+    from live_reconcile import reconcile_account
+    if LEDGER.tasks():
+        reconcile_account(LEDGER, make_client(), log)
+
+
+def _handoff_without_market(gid, claims):
+    """A verified ESPN final can outlive the market listing or its pregame prices."""
+    rows = LEDGER.rows(gid)
+    channels = {r["channel"] for r in rows}
+    for key in channels:
+        by_action = {r["action"]: r for r in rows if r["channel"] == key}
+        buy, sell = by_action.get("OPEN"), by_action.get("CLOSE")
+        if sell and sell["state"] not in (SUBMITTING, ACCEPTED, UNKNOWN):
+            sell = None
+        if buy and buy["state"] not in (SUBMITTING, ACCEPTED, UNKNOWN, FILLED):
+            buy = None
+        if not buy and not sell:
+            continue
+        row = buy or sell
+        tradable = (buy and buy["identity_verified"] and buy["market"] and buy["token"] and buy["outcome"]
+                    and (buy["state"] != FILLED or (buy["bought_size"] and buy["entry_price"] is not None)))
+        held = bool(tradable and buy["state"] == FILLED)
+        size = max(0., (row["bought_size"] or 0) - LEDGER.sold_size(gid, key)) if held else 0.
+        LEDGER.handoff(gid, key, action="HOLD" if held else row["action"],
+                       order_id="" if held else row["order_id"],
+                       token=row["token"], market=row["market"], outcome=row["outcome"],
+                       reason=("final_without_listing" if tradable else "legacy_log_unverified"),
+                       size=size, entry=row["entry_price"] or 0, position_id=row["position_id"] or row["attempt_id"])
+    for (game, key, outcome), record in claims.items():
+        if game == gid and key not in channels:
+            LEDGER.handoff(gid, key, action="HOLD", token="", market="", outcome=outcome or "",
+                           reason="legacy_log_unverified", size=record[1], entry=record[0] or 0,
+                           identity_verified=False)
+
+
+def _poll_games(live, client, traders, pool, recovery, filled, done, pending):
+    from datetime import timedelta
+    hong_kong = timezone(timedelta(hours=8))
+    slate_day = datetime.fromtimestamp(time.time(), hong_kong).date()
+    last_check = float("-inf")
+    check = None
+    archives, retry, archived, finished = {}, {}, {}, set()
+    saw_live = False
+    tick = 0
+    while True:
+        tick += 1
+        now = time.monotonic()
+        if live and LEDGER is not None and now - last_check >= 60 and (check is None or check.done()):
+            if check is not None:
+                try:
+                    check.result()
+                except Exception as exc:
+                    log(dict(ev="account_check_error", err=str(exc)[:200]))
+            check = pool.submit(_account_sweep)
+            last_check = now
+        try:
+            games = {g["gid"]: g for g in scoreboard()}
+        except Exception as exc:
+            log(dict(ev="espn_err", err=str(exc)[:160]))
+            time.sleep(8)
+            continue
+        # A restart after the slate ended can exit immediately. The raw feed
+        # must identify this Hong Kong day's games. Archived recovery results
+        # and yesterday's log claims do not identify the new scheduled slate.
+        current_slate = False
+        if games and all(g["state"] == "post" for g in games.values()):
+            try:
+                starts = [datetime.fromisoformat(str(g.get("start")).replace("Z", "+00:00"))
+                          for g in games.values()]
+                current_slate = all(start.tzinfo is not None
+                                    and start.astimezone(hong_kong).date() == slate_day
+                                    and start.timestamp() <= time.time() for start in starts)
+            except (ValueError, TypeError):
+                pass
+        wanted = (recovery | traders.keys()) - games.keys() - finished
+        for gid in wanted - archives.keys() - archived.keys():
+            if now >= retry.get(gid, 0):
+                archives[gid] = pool.submit(archived_final, gid)
+        for gid, future in list(archives.items()):
+            if future.done():
+                del archives[gid]
+                retry[gid] = now + 60
+                try:
+                    g = future.result()
+                    if g and gid in wanted:
+                        archived[gid] = g
+                except Exception as exc:
+                    log(dict(ev="archive_error", gid=gid, err=str(exc)[:160]))
+        for gid in wanted & archived.keys():
+            games[gid] = archived[gid]
+        for gid, g in games.items():
+            if gid in finished:
+                continue
+            final = g["state"] == "post"
+            saw_live |= g["state"] == "in"
+            t = traders.get(gid)
+            if t is None and (g["state"] == "in" or (final and gid in recovery)):
+                res = resolve(g, client)
+                if res and not res.get("fav") and gid in recovery and live:
+                    favorites = set()
+                    for r in LEDGER.open_rows(gid):
+                        if (r["identity_verified"] and r["market"] and r["market"] == res.get("market")
+                                and r["token"] in res["tokens"]):
+                            i = res["tokens"].index(r["token"])
+                            favorites.add(res["outcomes"][i if channel_spec(r["channel"])["side"] == "fav" else 1-i])
+                    if len(favorites) == 1:
+                        res = dict(res, fav=favorites.pop())
+                if res and res.get("fav"):
+                    try:
+                        t = GameTrader(gid, res, g["home"], live)
+                    except (ValueError, KeyError) as exc:
+                        log(dict(ev="recovery_market_error", gid=gid, err=str(exc)[:160]))
+                if t is None:
+                    if final and gid in recovery and live:
+                        _handoff_without_market(gid, filled)
+                        recovery.discard(gid)
+                        finished.add(gid)
+                        log(dict(ev="account_handoff", gid=gid, reason="final_without_listing"))
+                    continue
+                t.done.update(ch for game, ch in done if game == gid)
+                if live and LEDGER is not None:
+                    owned = {r["channel"] for r in LEDGER.rows(gid)}
+                    for (game, ch, outcome), record in filled.items():
+                        if game != gid or ch in owned:
+                            continue
+                        entry, size = record[:2]
+                        token = res["tokens"][res["outcomes"].index(outcome)] if outcome in res["outcomes"] else ""
+                        LEDGER.handoff(gid, ch, token=token,
+                                       market=res.get("market", "") if token else "", outcome=outcome or "",
+                                       reason="legacy_log_unverified", size=size,
+                                       entry=entry or 0, identity_verified=False)
+                traders[gid] = t
+                t.start()
+            if t is not None:
+                t.put(g)
+                if final and t.flat():
+                    t.stop()
+                    t.join()
+                    del traders[gid]
+                    finished.add(gid)
+                    recovery.discard(gid)
+                    log(dict(ev="trader_released", gid=gid, remaining=len(traders)))
+        if tick % 100 == 0:
+            cash = balance(client) if live else None
+            with LOCK:
+                positions = [(p["gid"], p["ch"], p["outcome"], p["entry"], p["size"]) for p in ALL_POSITIONS]
+            log(dict(ev="heartbeat", balance=cash, open=len(positions), traders=len(traders),
+                     positions=positions, confirmed=dict(CONFIRMED)))
+        if (games and all(g["state"] == "post" for g in games.values())
+                and not recovery and not traders and (saw_live or current_slate)):
+            if check is not None:
+                try:
+                    check.result()
+                except Exception as exc:
+                    log(dict(ev="account_check_error", err=str(exc)[:200]))
+            if live and LEDGER is not None and LEDGER.tasks():
+                # The earlier sweep can predate the last game's handoff.
+                try:
+                    _account_sweep()
+                except Exception as exc:
+                    log(dict(ev="account_check_error", err=str(exc)[:200]))
+            log(dict(ev="day_over", games=len(games),
+                     account_pending=len(LEDGER.tasks()) if live and LEDGER else 0))
+            break
+        time.sleep(POLL)
 
 
 if __name__ == "__main__":

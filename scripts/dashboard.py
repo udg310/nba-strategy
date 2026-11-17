@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from dashboard_games import GamesFeed
 from dashboard_markets import MarketDirectory
+from dashboard_model import LIVE_REPORT_START
 from dashboard_quotes import QuoteFeed
 from dashboard_service import Dashboard
 from dashboard_sources import Sources
@@ -25,9 +26,6 @@ from executor_lock import account_lock
 
 API = "/api/dashboard/v1"
 STATIC = ROOT / "dashboard"
-# Reports start from the current Hong Kong day, so the board shows today's
-# live P&L without needing the executor ledger's account origin.
-LIVE_REPORT_START = datetime.now(HK).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def number(value, default, maximum):

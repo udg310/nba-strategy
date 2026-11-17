@@ -24,7 +24,7 @@ class Dashboard:
         self.curves = {}
         self.cache_lock = threading.Lock()
 
-    def poll(self, env, now=None):
+    def poll(self, env, now=None, *, publish=True):
         raw = self.sources[env].read()
         if env in self.report_starts:
             raw = reporting_period(raw, self.report_starts[env])
@@ -39,6 +39,10 @@ class Dashboard:
             or ("策略实盘" if env == "live" else "策略模拟盘"),
         )
         store = self.stores[env]
+        if env not in self.previous_inputs and store.head:
+            # Preserve a recent observation on restart. The model still checks
+            # both market and collection timestamps against its 15-second limit.
+            quotes = {**store.quotes_at(now), **quotes}
         if (
             not fixtures
             and not games_source["last_success_at"]
@@ -121,7 +125,7 @@ class Dashboard:
             raw["sources"] = [sample(r, keys.get(r["name"])) for r in raw["sources"]]
             games_source = sample(games_source, previous[3])
         inputs = (raw, quotes, fixtures, games_source, midnight.date())
-        if previous == inputs:
+        if publish and previous == inputs:
             deadline = self.next_projection.get(env)
             if deadline is None or now < deadline:
                 return
@@ -133,6 +137,8 @@ class Dashboard:
             dict(game, **summaries.get(game["game_id"], summaries[None])) for game in fixtures
         ]
         snap["games_source"] = games_source
+        if not publish:
+            return view
         self.quotes.watch(env, [p.get("asset_id") for p in view["valuation_positions"] if p["quote"]["status"] != "resolved"])
         prior = self.last_quotes.get(env, {})
         changes = {k: v for k, v in quotes.items() if prior.get(k) != v}

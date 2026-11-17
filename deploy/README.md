@@ -9,11 +9,41 @@
   `curl -I https://clob.polymarket.com/`
   If CLOB needs a proxy, set `HTTPS_PROXY` in `/etc/nba-live.env`.
 
-## 2. Install
+## 2. Install or update
+
+Run from a trusted checkout containing these deployment scripts. On a fresh
+host, keep this checkout outside `/opt/nba-strategy`. The installer creates
+that directory for the `nba` user. An existing deployment must be owned and
+writable by `nba`. Run updates between trading sessions.
+
 ```sh
-sudo bash /opt/nba-strategy/deploy/install.sh
+sudo bash deploy/install.sh main
 ```
-(or clone first, then run `deploy/install.sh`).
+
+Both installs and updates fetch the named branch from
+`https://github.com/udg310/nba-strategy.git`. The default is `main`. For a
+reproducible release, use the full 40-character SHA of a published commit.
+For example, to install the commit checked out in your installer copy:
+
+```sh
+release_sha=$(git rev-parse --verify HEAD)
+sudo bash deploy/install.sh "$release_sha"
+sudo -u nba git -C /opt/nba-strategy rev-parse --verify HEAD
+```
+
+The installer prints the current and target SHAs and checks out the target
+with a detached HEAD. Updates require a fast-forward from the installed SHA.
+A missing target, divergent history, or local edits stop the update. The
+checkout preserves the virtual environment, runtime logs and ignored state.
+
+After the next live startup, compare the last recorded startup SHA with the
+installed SHA above. This reads the complete structured event from disk:
+
+```sh
+find /opt/nba-strategy/data/live_trade_final -name events.jsonl | sort |
+  while IFS= read -r log; do jq -r 'select(.ev == "start" and .live == true) | .git_sha' "$log"; done |
+  tail -n 1
+```
 
 ## 3. Credentials
 ```sh
@@ -28,7 +58,8 @@ sudo chown nba:nba /home/nba/.polymarket/*
 ```sh
 sudo -u nba /opt/nba-strategy/.venv/bin/python -I /opt/nba-strategy/scripts/live_runner.py --dry-run
 ```
-Check: `start` with balance, no exceptions. Ctrl+C to stop.
+Look for `live=false` in the startup event under `data/dry_run/`.
+The public market client leaves the account balance empty. Ctrl+C to stop.
 
 ## 5. Live daily
 The timer starts the service at **01:30 Asia/Hong_Kong** every day; the runner
@@ -38,6 +69,19 @@ systemctl list-timers nba-live.timer
 systemctl status nba-live.service
 journalctl -u nba-live.service -f
 ```
+
+Final games hand unresolved orders and positions to the account ledger. The
+runner checks the queue at startup, during the session, and at the final
+handoff. Between sessions, inspect the durable queue with the public funding
+address and the read-only report:
+
+```sh
+sudo -u nba /opt/nba-strategy/.venv/bin/python /opt/nba-strategy/scripts/live_account_report.py --account PUBLIC_FUNDING_ADDRESS
+```
+
+For a legacy holding in review, compare the original claim and recorded
+fills with the venue receipts. A confirmed market payout price and the
+receipt for an actual wallet redemption are separate facts.
 
 ## 6. Health / alerts
 `nba-health.timer` runs every 15 min; it only alerts while games are `pre/in`.

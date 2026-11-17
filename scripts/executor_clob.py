@@ -139,6 +139,26 @@ def rpc(method, params):
     return result["result"]
 
 
+def exchange_address(chain_id, version, neg_risk):
+    from py_clob_client_v2.config import get_contract_config
+
+    contracts = get_contract_config(chain_id)
+    if version == 3:
+        return contracts.exchange_v3
+    if version == 2:
+        return contracts.neg_risk_exchange_v2 if neg_risk else contracts.exchange_v2
+    raise ValueError(f"unsupported exchange version {version}")
+
+
+def signed_order_id(signer, signed, version, neg_risk):
+    from py_clob_client_v2.order_utils.exchange_order_builder_v2 import ExchangeOrderBuilderV2
+
+    chain_id = signer.get_chain_id()
+    builder = ExchangeOrderBuilderV2(exchange_address(chain_id, version, neg_risk), chain_id,
+                                     signer, domain_version=str(version))
+    return builder.build_order_hash(builder.build_order_typed_data(signed))
+
+
 def prepare(c, i):
     from py_clob_client_v2.clob_types import (
         AssetType,
@@ -146,10 +166,6 @@ def prepare(c, i):
         MarketOrderArgsV2,
         OrderType,
         PartialCreateOrderOptions,
-    )
-    from py_clob_client_v2.config import get_contract_config
-    from py_clob_client_v2.order_utils.exchange_order_builder_v2 import (
-        ExchangeOrderBuilderV2,
     )
 
     asset = i["asset"]
@@ -199,8 +215,7 @@ def prepare(c, i):
                 "retryable": True,
             }
     neg = bool(info.get("nr", False))
-    contracts = get_contract_config(CHAIN)
-    address = contracts.neg_risk_exchange_v2 if neg else contracts.exchange_v2
+    address = exchange_address(CHAIN, 2, neg)
     params = BalanceAllowanceParams(
         asset_type=AssetType.COLLATERAL if buying else AssetType.CONDITIONAL,
         token_id=None if buying else asset,
@@ -237,8 +252,7 @@ def prepare(c, i):
         ),
         PartialCreateOrderOptions(tick_size=tick, neg_risk=neg, version=2),
     )
-    builder = ExchangeOrderBuilderV2(address, CHAIN, c.signer, domain_version="2")
-    oid = builder.build_order_hash(builder.build_order_typed_data(signed))
+    oid = signed_order_id(c.signer, signed, 2, neg)
     return {"order_id": oid, "signed": asdict(signed)}
 
 

@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
-# One-time install on an Ubuntu 24.04 host. Run as root.
+# Install or update on an Ubuntu 24.04 host. Run as root.
 set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "run as root"; exit 1; }
+if (( $# > 1 )); then
+  echo "Usage: install.sh [BRANCH_OR_FULL_SHA]" >&2
+  exit 2
+fi
+release=${1-main}
+exec 9>/run/lock/nba-strategy-install.lock
+flock -n 9 || { echo "Another deployment is running" >&2; exit 1; }
 
 apt-get update
 apt-get install -y python3.12 python3.12-venv git curl jq
 
 id -u nba >/dev/null 2>&1 || adduser --disabled-password --gecos "" nba
 
-if [ -d /opt/nba-strategy/.git ]; then
-  sudo -u nba -H git -c safe.directory=/opt/nba-strategy -C /opt/nba-strategy pull --ff-only
-else
-  sudo -u nba git clone https://github.com/udg310/nba-strategy /opt/nba-strategy
+if [ ! -e /opt/nba-strategy ]; then
+  install -d -o nba -g nba /opt/nba-strategy
 fi
+sudo -u nba -H bash -s -- https://github.com/udg310/nba-strategy.git \
+  /opt/nba-strategy "$release" < "$(dirname -- "$0")/checkout-release.sh"
 
 sudo -u nba -H python3.12 -m venv /opt/nba-strategy/.venv
 sudo -u nba -H /opt/nba-strategy/.venv/bin/pip install -q \
@@ -51,4 +58,4 @@ echo
 echo "Installed. Next:"
 echo "  1) copy ~/.polymarket/env and ~/.polymarket/creds.json to /home/nba/.polymarket (chmod 600)"
 echo "  2) dry-run: sudo -u nba /opt/nba-strategy/.venv/bin/python -I /opt/nba-strategy/scripts/live_runner.py --dry-run"
-echo "  3) the timer starts the live runner daily at 07:00 Asia/Hong_Kong"
+echo "  3) the timer starts the live runner daily at 01:30 Asia/Hong_Kong"

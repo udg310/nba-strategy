@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
 from pathlib import Path
 
 from executor_ledger import cash_committed
+from dashboard_store import HK, instant
 
 UTC = timezone.utc
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
@@ -449,6 +450,7 @@ COMMON = (
     "ch",
     "outcome",
     "order_id",
+    "fill_id",
     "attempt_id",
     "position_id",
     "asset_id",
@@ -617,20 +619,117 @@ def runner_ident(game, channel, outcome, asset, markets):
 
 
 def attempt_rows(db, account):
-    owners = [r[0] for r in db.execute("SELECT DISTINCT account FROM attempts")]
+    tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    account_tables = [t for t in ("attempts", "order_fills", "reconcile_tasks", "ledger_accounts") if t in tables]
+    owners = [r[0] for r in db.execute(" UNION ".join(f"SELECT account FROM {t}" for t in account_tables))]
     if not account and len(owners) > 1:
         raise WrongScope
     matched = [o for o in owners if same_account(o, account)]
     if account and owners and len(matched) != 1:
         raise WrongScope
-    cols = "game_id,channel,action,attempt_id,position_id,order_id,state,updated_at,signal_at"
-    return (
-        rows(db, f"SELECT {cols} FROM attempts WHERE account=?", next(iter(matched or owners), "")),
-        len(owners) <= 1,
-    )
+    owner = next(iter(matched or owners), account)
+
+    def scoped(table):
+        return rows(db, f"SELECT * FROM {table} WHERE account=? ORDER BY rowid", owner) if table in tables else []
+
+    return scoped("attempts"), scoped("order_fills"), scoped("reconcile_tasks"), scoped("order_links"), owner, len(owners) <= 1
 
 
-def build_runner(scoped, markets, attempts, env):
+def receipt_row(r, logged, owner, markets, pid):
+    recorded = utc(r.get("recorded_at")) or (logged or {}).get("recorded_at")
+    matched = utc(r.get("matched_at"))
+    if not (matched or recorded):
+        return None
+    gid, ch, order, fid = r["game_id"], r["channel"], r["order_id"], r["fill_id"]
+    ident = runner_ident(gid, ch, owner.get("outcome"), owner.get("token"), markets)
+    side = "buy" if r["action"] == "OPEN" else "sell"
+    qty, price = number(r["size"]), number(r["price"])
+    amount = number(Decimal(qty) * Decimal(price))
+    aid = key("runner-fill", order.lower(), fid)
+    details = logged or {}
+    row = fill(ident, aid, pid, side, "runner", "confirmed", qty, price, amount, details.get("fee"),
+               matched or recorded, "matched" if matched else "recorded", order, fid, recorded,
+               details.get("fee_unit") or "cash")
+    for k in (*IDENTITY, "liquidity_role", "opens_position"):
+        if details.get(k) and not row.get(k):
+            row[k] = details[k]
+    if side == "buy" and pid and owner:
+        row["opens_position"] = True
+    return row
+
+
+def merge_runner_receipts(snap, receipts, tasks, attempts, markets, resolve_pid):
+    """Prefer individual receipts. Journal evidence can supply a fee or a legacy observation time."""
+    owners = {(r["game_id"], r["channel"]): r for r in attempts if r["action"] == "OPEN"}
+    owners.update({(r["game_id"], r["channel"]): r for r in tasks})
+    journal = defaultdict(dict)
+    for a in snap["activity"]:
+        if a["order_id"]:
+            journal[a["order_id"].lower()][a["fill_id"]] = a
+    groups = defaultdict(list)
+    for r in receipts:
+        groups[r["order_id"].lower()].append(r)
+    replaced = set()
+    updates = []
+    for order in dict.fromkeys((*journal, *groups)):
+        logs = journal[order]
+        aggregate = logs.get(None)
+        individual = {fid: a for fid, a in logs.items() if fid}
+        durable = groups[order]
+        undated_qty = Decimal(0)
+        for r in durable:
+            gid, ch, fid = r["game_id"], r["channel"], r["fill_id"]
+            owner = owners.get((gid, ch), {})
+            pid = resolve_pid(gid, ch, owner.get("position_id"))
+            logged = individual.get(fid)
+            if (not logged and aggregate and len(durable) == 1 and not individual
+                    and aggregate["quantity"] == number(r["size"]) and aggregate["price"] == number(r["price"])):
+                logged = aggregate
+            row = receipt_row(r, logged, owner, markets, pid)
+            if row is None:
+                undated_qty += Decimal(str(r["size"]))
+                if not aggregate and pid:
+                    ident = runner_ident(gid, ch, owner.get("outcome"), owner.get("token"), markets)
+                    info = snap["meta"].setdefault(pid, meta(ident))
+                    info["issues"].append(issue("source_gap", pid))
+                continue
+            individual[fid] = row
+        if not individual:
+            continue
+        if aggregate and Decimal(aggregate["quantity"] or 0) != undated_qty:
+            # Receipts and the old summary describe the same order. An archive
+            # can have only part of its receipts, or carry the only actual fee.
+            total = sum((Decimal(a["quantity"]) for a in individual.values() if a["quantity"]), Decimal(0))
+            reported = Decimal(aggregate["quantity"] or 0)
+            if reported > total or (reported == total and aggregate["fee"] is not None
+                                    and any(a["fee"] is None for a in individual.values())):
+                replaced.update(a["id"] for a in individual.values())
+                continue
+            replaced.add(aggregate["id"])
+        if durable:
+            replaced.update(a["id"] for fid, a in logs.items() if fid)
+            updates.extend(individual.values())
+    snap["activity"] = [a for a in snap["activity"] if a["id"] not in replaced]
+    snap["activity"].extend(updates)
+    for task in tasks:
+        if task["state"] != "DONE" or not task["settled_shares"]:
+            continue
+        if task["payout_price"] != 0 and not task["redemption_ref"]:
+            continue
+        gid, ch = task["game_id"], task["channel"]
+        pid = resolve_pid(gid, ch, task["position_id"])
+        ident = runner_ident(gid, ch, task["outcome"], task["token"], markets)
+        aid = key("runner-settlement", gid, ch, pid)
+        # settled_payout is the confirmed net payout (zero for an expired loser).
+        snap["activity"].append(fill(ident, aid, pid, "settlement", "runner", "confirmed",
+                                     number(task["settled_shares"]), number(task["payout_price"]),
+                                     number(task["settled_payout"]), "0", utc(task["updated_at"]),
+                                     "settlement_booked"))
+        if pid:
+            snap["meta"].setdefault(pid, meta(ident))["pending_settlement"] = False
+
+
+def build_runner(scoped, markets, attempts, env, receipts=(), tasks=(), links=()):
     snap = blank()
     # Runner enforces one OPEN per game/channel. An explicit durable ID wins;
     # ambiguous historical positions must not be assigned by their asset alone.
@@ -639,12 +738,18 @@ def build_runner(scoped, markets, attempts, env):
         if r["ev"] in ("buy", "resume_position") and r.get("position_id"):
             candidates[r.get("gid"), r.get("ch")].add(safe_id(r["position_id"]))
     attempt_orders = {}
+    opening_orders = {}
+    venue = {(r["game_id"], r["channel"], r["action"], r["old_id"].lower()): r["venue_id"] for r in links}
     for r in attempts:
         if r["action"] == "OPEN" and r["order_id"]:
             attempt_orders[r["attempt_id"]] = r["order_id"]
         if r["action"] == "OPEN":
             pid = safe_id(r["position_id"] or r["attempt_id"])
             candidates[r["game_id"], r["channel"]].add(pid)
+            opening_orders[r["game_id"], r["channel"], pid] = r
+    for task in tasks:
+        if task["position_id"]:
+            candidates[task["game_id"], task["channel"]].add(safe_id(task["position_id"]))
 
     def resolve_pid(g, ch, explicit=None):
         if explicit:
@@ -662,16 +767,14 @@ def build_runner(scoped, markets, attempts, env):
         # The live runner logs the wallet balance at start.  Use the first one
         # as the accounting origin so the board can compute P&L without the
         # executor ledger.
-        if ev == "start":
-            if snap["available_cash"] is None and r.get("balance") is not None:
-                snap["available_cash"] = maybe_number(r.get("balance"))
-                snap["known_origin"] = snap["available_cash"] is not None
-            continue
-        if ev in ("heartbeat", "stopped"):
-            # Latest wallet balance is the live cash figure the board shows;
-            # the closing "stopped" event carries the final one.
-            if r.get("balance") is not None:
-                snap["available_cash"] = maybe_number(r.get("balance"))
+        if ev in ("start", "heartbeat", "stopped"):
+            cash = maybe_number(r.get("balance"))
+            if cash is not None:
+                day = instant(at).astimezone(HK).date()
+                snap.setdefault("opening_cash", {}).setdefault(day.isoformat(), cash)
+                snap["available_cash"] = cash
+                if ev == "start":
+                    snap["known_origin"] = True
             continue
         local = (path, game, channel)
         pid = resolve_pid(game, channel, r.get("position_id") or session_pids.get(local))
@@ -690,13 +793,23 @@ def build_runner(scoped, markets, attempts, env):
             posted_orders[local] = order
         if ev == "buy":
             order = order or posted_orders.get(local) or safe_id(attempt_orders.get(r.get("attempt_id")))
+            opening = opening_orders.get((game, channel, pid))
+            if (not order and opening and opening.get("order_id") and opening.get("token") == ident["asset_id"]
+                    and opening.get("outcome") == outcome and outcome):
+                order = safe_id(opening["order_id"])
         if ev in ("buy", "sell"):
             is_buy = ev == "buy"
-            aid = key("runner-order", ev, order) if order else key("runner-trade", game, channel, ev, at)
+            if order:
+                order = venue.get((game, channel, "OPEN" if is_buy else "CLOSE", order.lower()), order)
+            fid = safe_id(r.get("fill_id"))
+            if fid and order:
+                aid = key("runner-fill", order.lower(), fid)
+            else:
+                aid = key("runner-order", ev, order) if order else key("runner-trade", game, channel, ev, at)
             try:
                 qty = number(r.get("filled_shares" if is_buy else "sold_shares"))
                 price = number(r.get("entry" if is_buy else "exit"))
-                gross = number(r.get("usd")) if is_buy else None
+                gross = number(r.get("usd")) if is_buy and not fid else None
                 if gross is None and qty is not None and price is not None:
                     gross = number(Decimal(qty) * Decimal(price))
             except (ValueError, InvalidOperation):
@@ -708,7 +821,7 @@ def build_runner(scoped, markets, attempts, env):
                 pid,
                 ev,
                 "runner",
-                "inferred" if inferred else "aggregate",
+                "inferred" if inferred else ("confirmed" if fid and order else "aggregate"),
                 qty,
                 price,
                 gross,
@@ -716,6 +829,7 @@ def build_runner(scoped, markets, attempts, env):
                 at,
                 "recorded" if env == "live" else "simulated",
                 order,
+                fid,
                 fee_unit=r.get("fee_unit") or "cash",
             )
             role = str(r.get("liquidity_role", "")).lower()
@@ -761,6 +875,7 @@ def build_runner(scoped, markets, attempts, env):
                 if ev == "reconcile_add":
                     item["added_quantity"] = maybe_number(r.get("extra"))
                     item["accounted_quantity"] = maybe_number(r.get("accounted"))
+    merge_runner_receipts(snap, receipts, tasks, attempts, markets, resolve_pid)
     if env == "live":
         buys = {a["position_id"] for a in snap["activity"] if a["kind"] == "buy"}
         for pid, timeline in snap["timeline"].items():
@@ -797,14 +912,18 @@ def build_runner(scoped, markets, attempts, env):
 def combine(base, manual, runner, markets):
     snap = blank()
     snap["available_cash"] = base["available_cash"]
+    snap["opening_cash"] = runner.get("opening_cash", {})
     snap["known_origin"] = base["known_origin"]
     snap["coverage_from"] = base["coverage_from"]
     snap["activity"] = list(base["activity"])
     snap["meta"] = {pid: dict(m, issues=list(m["issues"])) for pid, m in base["meta"].items()}
     snap["timeline"] = defaultdict(list, {pid: list(items) for pid, items in base["timeline"].items()})
     orders, by_game, by_asset = defaultdict(list), defaultdict(list), defaultdict(list)
+    settled = defaultdict(list)
     manual_orders = {m["order_id"] for m in manual}
     for a in base["activity"]:
+        if a["kind"] == "settlement":
+            settled[a["position_id"]].append(a)
         if a["order_id"]:
             orders[a["order_id"]].append(a)
             by_game[a["kind"], a["game_id"]].append(a)
@@ -821,6 +940,8 @@ def combine(base, manual, runner, markets):
             reviewed.add(pid)
             continue
         exact = orders.get(order, [])
+        if exact and a["fill_id"]:
+            exact = [f for f in exact if f["fill_id"] == a["fill_id"]]
         if exact:
             ids = {f["position_id"] for f in exact}
             qty = sum(Decimal(f["quantity"]) for f in exact)
@@ -874,6 +995,13 @@ def combine(base, manual, runner, markets):
     for a in runners:
         pid = a["position_id"]
         dst = aliases.get(pid, pid)
+        # A runner handoff books the whole remaining position once. Its
+        # executor ledger may already contain the same payout in one or more legs.
+        if a["kind"] == "settlement" and settled.get(dst):
+            legs = settled[dst]
+            if all(a[k] is not None and all(f[k] is not None for f in legs)
+                   and sum(Decimal(f[k]) for f in legs) == Decimal(a[k]) for k in ("quantity", "gross")):
+                continue
         if pid in reviewed and pid not in aliases:
             dst = None
         if dst != pid:
@@ -1000,20 +1128,20 @@ class Sources:
         )
         if owner is not None:
             self.ledger_owner = owner
-        attempts, allow_untagged = read(
+        attempts, receipts, tasks, links, wallet, allow_untagged = read(
             "attempts",
             self.attempts,
             lambda: self.attempts.read(
                 lambda db: attempt_rows(db, owner or self.account), scope=owner or self.account
             ),
-            ((), True),
+            ((), (), (), (), None, True),
         )
         if statuses[-1]["reason"] == "账户或环境不匹配":
             allow_untagged = False
         scoped, markets, damaged, beat = read(
             "runner",
             self.runner,
-            lambda: self.runner.read(self.env, owner or self.account, allow_untagged),
+            lambda: self.runner.read(self.env, owner or self.account or wallet, allow_untagged),
             ((), self.empty_markets, False, None),
         )
         if damaged and statuses[-1]["status"] != "down":
@@ -1022,23 +1150,22 @@ class Sources:
             age = (now - datetime.fromisoformat(beat.replace("Z", "+00:00"))).total_seconds()
             if 0 <= age <= 90:
                 statuses[-1].update(status="ok", reason=None)
-        if self.previous is None or any(
-            before is not after for before, after in zip(self.previous, (base, scoped, attempts, markets))
-        ):
-            runner = build_runner(scoped, markets, attempts, self.env)
+        inputs = base, scoped, attempts, receipts, tasks, links, markets
+        if self.previous is None or any(before is not after for before, after in zip(self.previous, inputs)):
+            runner = build_runner(scoped, markets, attempts, self.env, receipts, tasks, links)
             self.projected = combine(base, manual, runner, markets)
             # Our live has only the live runner (no executor ledger): use its
             # start balance as the account origin so the board can compute P&L.
             # When an executor ledger is present it stays the book of record.
-            if not base["activity"] and runner["available_cash"] is not None:
+            if not self.ledger.path and runner["available_cash"] is not None:
                 self.projected["available_cash"] = runner["available_cash"]
-                self.projected["known_origin"] = True
+                self.projected["known_origin"] = runner["known_origin"]
             self.last_event = {
                 name: max((a["time"] for a in source["activity"]), default=None)
                 for name, source in [("runner", runner), ("executor", base)]
             }
             self.last_event["attempts"] = max((utc(r["updated_at"]) for r in attempts), default=None)
-            self.previous = base, scoped, attempts, markets
+            self.previous = inputs
         for status in statuses:
             status["last_event_at"] = self.last_event.get(status["name"])
         result = dict(self.projected, sources=statuses)

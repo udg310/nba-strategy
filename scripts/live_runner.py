@@ -71,6 +71,39 @@ LOCK_ENABLED = os.environ.get("LOCK_ENABLED", "0") == "1"
 LOCK_CH = {"style": "settle", "side": "fav", "weight": 1.0, "tp": None,
            "price_min": 0.0, "price_max": 0.985}
 
+# Dog lock: buy the DOG once it leads by >= DOGLOCK_MARGIN, hold to settlement.
+# Backtest (n=349, 2025-26 + 2026-27): +10.3%/trade, 31.5% full loss, longest
+# losing run 4 -- but only after a price floor: whatever is cheap at 12+ is
+# often cheap for a reason (p<0.45 -> -17.5% in the wide sample), and a Q1
+# trigger overlaps A/C and is the worst bucket (-0.9%).  Confirmations
+# ("still leading 5 min later") cut the full-loss rate to 22% but the price
+# has already run by then, so the return collapses to ~+4%: no free lunch.
+DOGLOCK_ENABLED = os.environ.get("DOGLOCK_ENABLED", "0") == "1"
+DOGLOCK_FRAC = float(os.environ.get("DOGLOCK_FRAC", "0.05"))
+MAX_OPEN_DOGLOCK = int(os.environ.get("MAX_OPEN_DOGLOCK", "999"))
+DOGLOCK_MARGIN = float(os.environ.get("DOGLOCK_MARGIN", "12"))
+DOGLOCK_MIN_EL = float(os.environ.get("DOGLOCK_MIN_EL", "720"))   # Q2 onwards
+DOGLOCK_PRICE_MIN = float(os.environ.get("DOGLOCK_PRICE_MIN", "0.45"))
+DOGLOCK_PRICE_MAX = float(os.environ.get("DOGLOCK_PRICE_MAX", "0.985"))
+# Optional margin stop: exit once the dog's lead falls below this many points.
+# Negative = off (hold to settlement), which is what the backtest prefers:
+# on 349 trades a +5 stop scores +13.6% vs +9.8% for settlement only while
+# exits fill at the printed price, but it goes to +9.4% once the exit pays
+# 4c of realistic slippage -- and a take-profit at any level is strictly
+# worse (-$60 to -$113 on the same games), because DL's edge IS settlement.
+# The stop still cuts portfolio drawdown by ~13%, so it buys a smoother
+# curve with the EV, not a better one.
+DOGLOCK_STOP_LEAD = float(os.environ.get("DOGLOCK_STOP_LEAD", "-1"))
+# How long after the crossing a DL entry is still allowed, in wall seconds.
+# Without it a runner that starts mid-game (or a book that is momentarily
+# blank) would buy a dog that led by 12 ten minutes ago at a totally
+# different price, which is not the trade the backtest measured.
+DOGLOCK_CHASE = float(os.environ.get("DOGLOCK_CHASE", "180"))
+DOGLOCK_CH = {"style": "settle", "side": "dog", "weight": 1.0, "tp": None,
+              "price_min": DOGLOCK_PRICE_MIN, "price_max": DOGLOCK_PRICE_MAX,
+              "stop_margin_hi": (-DOGLOCK_STOP_LEAD if DOGLOCK_STOP_LEAD >= 0
+                                 else None)}
+
 
 def lock_signal(evs):
     """Lock: the first moment the favourite leads by >= LOCK_MARGIN."""
@@ -80,9 +113,40 @@ def lock_signal(evs):
     return None
 
 
+def doglock_signal(evs):
+    """Dog lock: the first moment the DOG leads by >= DOGLOCK_MARGIN, at or
+    after DOGLOCK_MIN_EL.  A Q1 trigger is skipped on purpose: it is the same
+    move A/C fires on, and it is the only bucket with a negative return."""
+    for el, m, w in evs:
+        if el >= DOGLOCK_MIN_EL and m <= -DOGLOCK_MARGIN:
+            return {"el": el, "margin": m, "wall": w}
+    return None
+
+
 def channel_spec(ch):
-    """Spec for a channel; 'L' is the lock channel (not in strategy.CHANNELS)."""
-    return LOCK_CH if ch == "L" else S.CHANNELS[ch]
+    """Spec for a channel; 'L' and 'DL' live here, not in strategy.CHANNELS."""
+    if ch == "L":
+        return LOCK_CH
+    if ch == "DL":
+        return DOGLOCK_CH
+    return S.CHANNELS[ch]
+
+
+def _slot_pool(ch):
+    """'L' and 'DL' each keep their own slot pool (and their own cap)."""
+    if ch == "L":
+        return "L", MAX_OPEN_LOCK
+    if ch == "DL":
+        return "DL", MAX_OPEN_DOGLOCK
+    return None, MAX_OPEN
+
+
+def _frac_of(ch):
+    if ch == "L":
+        return LOCK_FRAC
+    if ch == "DL":
+        return DOGLOCK_FRAC
+    return STAKE_FRAC * S.CHANNELS[ch]["weight"]
 
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
 SELL_WINDOW = 900
@@ -447,7 +511,7 @@ class GameTrader(threading.Thread):
             return
         evs = self._events(g, now)
         pre = self.res.get("pre")
-        for key in ("A", "C", "D", "L"):
+        for key in ("A", "C", "D", "L", "DL"):
             if key in self.done or key in self.pending:
                 continue
             if key == "L":
@@ -455,6 +519,15 @@ class GameTrader(threading.Thread):
                     continue
                 ch = LOCK_CH
                 sig = lock_signal(evs)
+            elif key == "DL":
+                if not DOGLOCK_ENABLED:
+                    continue
+                ch = DOGLOCK_CH
+                sig = doglock_signal(evs)
+                if sig is not None and now - sig["wall"] > DOGLOCK_CHASE:
+                    # the crossing is stale (runner started mid-game): the
+                    # price no longer reflects the moment the backtest bought
+                    sig = None
             else:
                 ch = S.CHANNELS[key]
                 sig = (S.process_signal(evs, pre, ch) if ch["style"] == "process"
@@ -475,21 +548,26 @@ class GameTrader(threading.Thread):
             ok = ((eff >= S.PRICE_FLOOR) if ch["style"] == "process"
                   else ch["price_min"] <= eff <= ch["price_max"])
             if not ok:
+                if key == "DL":
+                    # the band is checked at the crossing moment; a miss there
+                    # means the game is skipped, not re-priced later (the same
+                    # convention D uses in the backtest)
+                    self.done.add("DL")
                 log({"ev": "signal_skip_band", "gid": self.gid, "ch": key,
                      "ask": ask, "el": sig["el"], "m": sig["margin"]})
                 continue
+            pool, cap = _slot_pool(key)
             with LOCK:
-                if key == "L":
-                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] == "L")
-                    cap = MAX_OPEN_LOCK
+                if pool is None:
+                    n_open = sum(1 for x in ALL_POSITIONS
+                                 if _slot_pool(x["ch"])[0] is None)
                 else:
-                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] != "L")
-                    cap = MAX_OPEN
+                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] == pool)
             if n_open >= cap:
-                if key == "L":
-                    # one lock per game: when the 3 slots are full, skip this
+                if pool is not None:
+                    # one lock per game: when the slots are full, skip this
                     # game rather than buy later at a higher (worse) price.
-                    self.done.add("L")
+                    self.done.add(key)
                 log({"ev": "signal_skip_cap", "gid": self.gid, "ch": key})
                 continue
             bal = balance(self.client)
@@ -502,10 +580,7 @@ class GameTrader(threading.Thread):
             with LOCK:
                 deployed = sum(p["size"] * p["entry"] for p in ALL_POSITIONS)
             equity = bal + deployed
-            if key == "L":
-                usd = min(equity * LOCK_FRAC, bal * (1 - CASH_RESERVE))
-            else:
-                usd = min(equity * STAKE_FRAC * ch["weight"], bal * (1 - CASH_RESERVE))
+            usd = min(equity * _frac_of(key), bal * (1 - CASH_RESERVE))
             if usd < MIN_ORDER:
                 log({"ev": "signal_skip_cash", "gid": self.gid, "ch": key,
                      "usd": round(usd, 2), "balance": round(bal, 2)})
@@ -667,15 +742,15 @@ class GameTrader(threading.Thread):
                 continue
 
             with LOCK:
-                # Lock has its own slot pool; A/C/D must not be crowded out by
-                # lock positions (and vice versa).  The signal-time check above
-                # uses the same split, so keep it consistent here.
-                if q.get("ch") == "L":
-                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] == "L")
-                    cap = MAX_OPEN_LOCK
+                # Locks (L, DL) each have their own slot pool; A/C/D must not
+                # be crowded out by them (and vice versa).  The signal-time
+                # check above uses the same split, so keep it consistent here.
+                pool, cap = _slot_pool(q.get("ch"))
+                if pool is None:
+                    n_open = sum(1 for x in ALL_POSITIONS
+                                 if _slot_pool(x["ch"])[0] is None)
                 else:
-                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] != "L")
-                    cap = MAX_OPEN
+                    n_open = sum(1 for x in ALL_POSITIONS if x["ch"] == pool)
                 if n_open >= cap:
                     q["last_err"] = "open cap"
                     continue
@@ -776,11 +851,20 @@ class GameTrader(threading.Thread):
                 # D thesis: favourite leading 5-10.  If the lead turns
                 # negative, the thesis is broken: exit at the market rather
                 # than riding a -100% settlement.  This is a margin stop,
-                # not a price stop.
-                stop = S.CHANNELS.get(p["ch"], {}).get("stop_margin")
-                if stop is not None and self.hist:
+                # not a price stop.  DL is the mirror image: its thesis is a
+                # dog leading 12+, so it exits when that lead collapses
+                # (`stop_margin_hi`, applied to the favourite margin).
+                try:
+                    spec = channel_spec(p["ch"])
+                except KeyError:      # a resumed row with an unknown channel
+                    spec = {}
+                stop = spec.get("stop_margin")
+                stop_hi = spec.get("stop_margin_hi")
+                if ((stop is not None or stop_hi is not None) and self.hist
+                        and g["state"] != "post"):
                     m_now = self.hist[-1][2]
-                    if m_now < stop:
+                    if ((stop is not None and m_now < stop)
+                            or (stop_hi is not None and m_now > stop_hi)):
                         p["selling"] = True
                         p["exit_reason"] = "margin_stop"
                         _, bid, _ = book(self.client, p["token"])
@@ -931,10 +1015,19 @@ class GameTrader(threading.Thread):
                 # fill, so repost at the new bid.  Selling already-sold shares
                 # would be rejected by the exchange, so this cannot double.
                 if time.time() - posted_at > REPOST_AFTER:
+                    # A/C/D/DL can share one token (all three dog channels buy
+                    # the DOG).  The token balance is then the sum of every
+                    # holder's shares, so "bal >= p.size" would be true even
+                    # after OUR shares sold -- reposting there would sell
+                    # another channel's position.  Compare against what the
+                    # other positions on this token account for instead: any
+                    # excess over that is still ours.  DL's margin stop fires
+                    # exactly when A/C may still be open, so this path matters.
                     same = [x for x in self.positions
                             if x["token"] == p["token"] and x is not p]
-                    bal = token_balance(self.client, p["token"]) if not same else None
-                    if bal is not None and bal >= p["size"] - DUST:
+                    others = sum(x["size"] for x in same)
+                    bal = token_balance(self.client, p["token"])
+                    if bal is not None and bal - others >= p["size"] - DUST:
                         posted = False
                         posted_unknown = False
                         order_id = None
@@ -1201,7 +1294,12 @@ def run(live):
     log({"ev": "start", "live": live, "balance": bal, "stake_frac": STAKE_FRAC,
          "stake_now": {k: round((bal or 0) * STAKE_FRAC * w, 2)
                        for k, w in (("A", 1.0), ("C", 1.0), ("D", 2.0))},
-         "max_open": MAX_OPEN, "outdir": OUTDIR})
+         "max_open": MAX_OPEN, "outdir": OUTDIR,
+         "lock": {"on": LOCK_ENABLED, "frac": LOCK_FRAC, "margin": LOCK_MARGIN},
+         "doglock": {"on": DOGLOCK_ENABLED, "frac": DOGLOCK_FRAC,
+                     "margin": DOGLOCK_MARGIN, "min_el": DOGLOCK_MIN_EL,
+                     "price": [DOGLOCK_PRICE_MIN, DOGLOCK_PRICE_MAX],
+                     "stop_lead": DOGLOCK_STOP_LEAD}})
     if live and (bal or 0) < 2.0:
         log({"ev": "abort", "why": "balance too low", "balance": bal})
         return

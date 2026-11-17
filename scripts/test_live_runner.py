@@ -146,6 +146,37 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertTrue(any(r.get("reason") == "margin_stop" for r in self.logs))
         self.assertTrue(any(r.get("ev") == "sell" for r in self.logs))
 
+    # ---- DL margin stop is the mirror image of D's ----
+    def test_doglock_margin_stop_exits_when_lead_collapses(self):
+        lr.book = lambda client, tok: (0.42, 0.40, "0.01")
+        lr.market_order = self._order("SELL", fill=-1)
+        spec = dict(lr.DOGLOCK_CH, stop_margin_hi=-5.0)
+        orig = lr.channel_spec
+
+        def patched(ch):
+            return spec if ch == "DL" else orig(ch)
+        lr.channel_spec = patched
+        try:
+            t = lr.GameTrader("g5", RES, "HOME", True)
+            now = time.time()
+            # the dog led by 14 on entry and has now collapsed to +2
+            t.hist = [(now, 2200.0, -2.0, ("h", "a"))]
+            p = {"gid": "g5", "ch": "DL", "token": "td", "outcome": "Dog",
+                 "entry": 0.55, "size": 5.0, "t_in": now - 900,
+                 "el_in": 1300.0, "style": "settle", "tp": None,
+                 "selling": False}
+            t.positions.append(p)
+            t._manage_exits({"state": "in", "period": 4, "detail": "3:00",
+                             "home_score": 90, "away_score": 92}, now)
+        finally:
+            lr.channel_spec = orig
+        self.assertNotIn(p, t.positions)
+        self.assertTrue(any(r.get("reason") == "margin_stop" for r in self.logs))
+        self.assertTrue(any(r.get("ev") == "sell" for r in self.logs))
+
+    def test_doglock_margin_stop_ships_off(self):
+        self.assertIsNone(lr.DOGLOCK_CH["stop_margin_hi"])
+
     # ---- C 30 game-clock minute exit ----
     def test_c_game_clock_time_exit(self):
         lr.book = lambda client, tok: (0.52, 0.50, "0.01")
@@ -293,6 +324,88 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertGreaterEqual(len(posts), 2,
                                 "must repost after the FOK misses")
 
+    # ---- DL entry: no chasing a stale crossing, no re-pricing after a band miss ----
+    def _dl_signal(self, wall_age, ask=0.60, enable=True):
+        old = (lr.book, lr.book_depth, lr.balance, lr.market_order,
+               lr.DOGLOCK_ENABLED)
+        lr.book = lambda client, tok: (ask, ask - 0.01, "0.01")
+        lr.book_depth = lambda client, tok: {}
+        lr.balance = lambda client: 100.0
+        lr.market_order = self._order("BUY", fill=-1)
+        lr.DOGLOCK_ENABLED = enable
+        try:
+            t = lr.GameTrader("gd", RES, "HOME", True)
+            now = time.time()
+            t.hist = [(now - wall_age - 2, 790.0, -11.0, ("h", "a")),
+                      (now - wall_age, 800.0, -13.0, ("h", "a")),
+                      (now, 810.0, -13.0, ("h", "a"))]
+            g = {"state": "in", "period": 2, "detail": "6:00",
+                 "home_score": 40, "away_score": 53}
+            t._find_signals(g, now)
+        finally:
+            (lr.book, lr.book_depth, lr.balance, lr.market_order,
+             lr.DOGLOCK_ENABLED) = old
+        return "DL" in t.pending, "DL" in t.done
+
+    def test_doglock_enters_fresh_crossing(self):
+        pending, done = self._dl_signal(wall_age=5)
+        self.assertTrue(pending, "a fresh 12+ dog crossing must enter")
+
+    def test_doglock_skips_stale_crossing(self):
+        pending, done = self._dl_signal(wall_age=lr.DOGLOCK_CHASE + 60)
+        self.assertFalse(pending, "must not chase a crossing seen minutes ago")
+        self.assertFalse(done)
+
+    def test_doglock_band_miss_skips_game(self):
+        pending, done = self._dl_signal(wall_age=5, ask=0.30)   # below 0.45
+        self.assertFalse(pending)
+        self.assertTrue(done, "a band miss at the crossing must end DL for the game")
+
+    def test_doglock_disabled_by_default_flag(self):
+        pending, _ = self._dl_signal(wall_age=5, enable=False)
+        self.assertFalse(pending)
+
+    # ---- a shared token must not make one channel sell another's shares ----
+    def _sweep(self, balance, sibling):
+        """Run one sell with a sibling position on the same token; return posts."""
+        old = (lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP,
+               lr.book, lr.market_order, lr.token_balance)
+        lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP = 0.4, 0.02, 0.005
+        posts = []
+
+        def fake_post(client, token, side, amount, price, tick, on_prepared=None):
+            posts.append(amount)
+            oid = f"o{len(posts)}"
+            if on_prepared:
+                on_prepared(oid)
+            return {"success": True, "orderID": oid}, oid
+        lr.book = lambda client, tok: (0.55, 0.50, "0.01")
+        lr.market_order = fake_post
+        lr.token_balance = lambda client, tok: balance
+        try:
+            t = lr.GameTrader("gs", RES, "HOME", True)
+            sib = {"gid": "gs", "ch": "A", "token": "td", "outcome": "Dog",
+                   "entry": 0.40, "size": sibling, "t_in": time.time(),
+                   "el_in": 100.0, "style": "process", "tp": 0.20,
+                   "selling": False}
+            p = {"gid": "gs", "ch": "DL", "token": "td", "outcome": "Dog",
+                 "entry": 0.55, "size": 4.0, "t_in": time.time(),
+                 "el_in": 1300.0, "style": "settle", "tp": None,
+                 "selling": True, "exit_reason": "margin_stop"}
+            t.positions.extend([sib, p])
+            t._sell(p)
+        finally:
+            (lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP,
+             lr.book, lr.market_order, lr.token_balance) = old
+        return posts
+
+    def test_shared_token_reposts_only_while_our_shares_remain(self):
+        # balance 4.0 == the sibling's 4.0: OUR shares are gone, so reposting
+        # would sell A's position.  One post only.
+        self.assertEqual(len(self._sweep(4.0, 4.0)), 1)
+        # balance 8.0 == ours (4) + sibling (4): our shares are still there.
+        self.assertGreaterEqual(len(self._sweep(8.0, 4.0)), 2)
+
     # ---- token shares we did not account for are added to the position ----
     def test_balance_extra_added(self):
         lr.book = lambda client, tok: (0.60, 0.50, "0.01")
@@ -359,6 +472,32 @@ class LiveRunnerFixes(unittest.TestCase):
         spec = lr.channel_spec("L")
         self.assertEqual(spec["side"], "fav")
         self.assertEqual(spec["style"], "settle")
+
+    # ---- dog lock: fires only from Q2 on, on the dog's side, in its own pool ----
+    def test_doglock_signal_gates_clock_and_side(self):
+        # a Q1 12-point dog lead must NOT trigger
+        q1 = [(100, -12, 100), (400, -15, 400)]
+        self.assertIsNone(lr.doglock_signal(q1))
+        # the same lead once Q2 starts does
+        q2 = [(100, -12, 100), (760, -13, 760), (900, -14, 900)]
+        s = lr.doglock_signal(q2)
+        self.assertIsNotNone(s)
+        self.assertEqual(s["margin"], -13)
+        self.assertEqual(s["el"], 760)
+        # favourite leads never trigger it
+        self.assertIsNone(lr.doglock_signal([(760, 12, 760), (900, 14, 900)]))
+        spec = lr.channel_spec("DL")
+        self.assertEqual(spec["side"], "dog")
+        self.assertEqual(spec["style"], "settle")
+
+    def test_doglock_has_own_slot_pool_and_frac(self):
+        self.assertEqual(lr._slot_pool("DL"), ("DL", lr.MAX_OPEN_DOGLOCK))
+        self.assertEqual(lr._slot_pool("L"), ("L", lr.MAX_OPEN_LOCK))
+        self.assertEqual(lr._slot_pool("A"), (None, lr.MAX_OPEN))
+        self.assertAlmostEqual(lr._frac_of("DL"), lr.DOGLOCK_FRAC)
+        # A/C/D keep their own weighting, untouched by the dog lock
+        self.assertAlmostEqual(lr._frac_of("D"),
+                               lr.STAKE_FRAC * lr.S.CHANNELS["D"]["weight"])
 
     # ---- back-to-back same teams: the neighbour night's market is rejected ----
     def test_market_must_match_game_date(self):

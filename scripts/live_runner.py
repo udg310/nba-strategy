@@ -151,10 +151,17 @@ def _frac_of(ch):
 
 # ---- ownership -------------------------------------------------------------
 # One signal = one position = one order (the ledger enforces one OPEN per
-# game/channel), so a position's `size` and `entry` ARE its ledger row for
-# its own shares.  A/C/D/DL buy the same DOG token, so the wallet balance is
-# the sum of all of them and says nothing about ownership: every sell is
-# sized from `size`, never from the balance.
+# game/channel).  A position therefore records the signal that produced it
+# (`el_in`), the order (`position_id` = attempt id) and the shares that order
+# actually bought (`fill_shares`).  `size` starts at `fill_shares`, falls as
+# the position is sold, and only grows when unmatched wallet shares are
+# adopted (`adopted`, sole-holder case only).
+#
+# A/C/D/DL buy the same DOG token and the exchange sells fungible shares, so
+# there is no "sell order X's shares" instruction -- the id decides WHICH
+# signal may sell and on what rule, the quantity decides how many leave the
+# wallet.  That quantity is the position's own `size`, never the balance,
+# which is the sum of every channel holding the token.
 
 
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
@@ -684,7 +691,10 @@ class GameTrader(threading.Thread):
                "outcome": q["outcome"], "entry": entry, "size": shares,
                "t_in": time.time(), "el_in": q.get("el_sig"),
                "position_id": q.get("attempt_id"),
-               "style": q["style"], "tp": q["tp"], "selling": False}
+               "style": q["style"], "tp": q["tp"], "selling": False,
+               # what THIS order bought -- the anchor every sell is checked
+               # against, and the audit link back to the signal
+               "fill_shares": shares, "adopted": 0.0}
         self.positions.append(pos)
         with LOCK:
             ALL_POSITIONS.append(pos)
@@ -958,11 +968,13 @@ class GameTrader(threading.Thread):
                              "holders": [x["ch"] for x in siblings]})
                 else:
                     p["size"] += extra
+                    p["adopted"] = (p.get("adopted") or 0.0) + extra
                     log({"ev": "reconcile_add", "gid": self.gid, "ch": p["ch"],
                          "outcome": p["outcome"], "held": held,
                          "accounted": round(ours, 6),
                          "extra": round(extra, 6),
-                         "size": round(p["size"], 6)})
+                         "size": round(p["size"], 6),
+                         "fill_shares": round(p.get("fill_shares") or 0, 6)})
             _, bid, _ = book(self.client, p["token"])
             if bid is None and finished:
                 log({"ev": "no_exit", "gid": self.gid, "ch": p["ch"],
@@ -1025,7 +1037,9 @@ class GameTrader(threading.Thread):
                      "outcome": p["outcome"], "reason": p.get("exit_reason"),
                      "sold_shares": sold, "exit": px,
                      "remaining": round(p["size"], 6), "fills": len(fills),
-                     "order_id": order_id})
+                     "order_id": order_id,
+                     "position_id": p.get("position_id"),
+                     "el_in": p.get("el_in")})
                 if first:
                     log({"ev": "CONFIRMED_SELL", "gid": self.gid, "ch": p["ch"],
                          "sold_shares": sold, "exit": px})
@@ -1115,6 +1129,20 @@ class GameTrader(threading.Thread):
 
     def _post_sell(self, p):
         bal = token_balance(self.client, p["token"])
+        # Check the position still owns what it is about to sell: the shares
+        # this signal's order bought, plus anything the wallet proved was ours
+        # (`adopted`).  Anything beyond that is unaccounted for and gets said
+        # out loud rather than silently sold as if it were this signal's.
+        fill = p.get("fill_shares")
+        if fill is not None:
+            backed = fill + (p.get("adopted") or 0.0)
+            if p["size"] > backed + DUST:
+                log({"ev": "size_unbacked", "gid": self.gid, "ch": p["ch"],
+                     "size": round(p["size"], 6),
+                     "fill_shares": round(fill, 6),
+                     "adopted": round(p.get("adopted") or 0.0, 6),
+                     "position_id": p.get("position_id"),
+                     "el_in": p.get("el_in")})
         # Size the sell from THIS position, never from the wallet balance:
         # the balance is shared with any other channel holding this token.
         qty = math.floor(p["size"] * 100) / 100
@@ -1450,7 +1478,8 @@ def run(live):
                                "el_in": el_in,
                                "position_id": position_id or attempt_id,
                                "style": channel_spec(ch)["style"],
-                               "tp": channel_spec(ch)["tp"], "selling": False}
+                               "tp": channel_spec(ch)["tp"], "selling": False,
+                               "fill_shares": alloc, "adopted": 0.0}
                         t.positions.append(pos)
                         with LOCK:
                             ALL_POSITIONS.append(pos)

@@ -429,6 +429,31 @@ class LiveRunnerFixes(unittest.TestCase):
         got = t._fills("td", "BUY", set(), int(time.time()) - 5, "our-order")
         self.assertEqual(len(got), 1)
 
+    # ---- the sell is checked against what its own order bought ----
+    def test_sell_flags_a_size_beyond_its_own_fill(self):
+        lr.book = lambda client, tok: (0.55, 0.50, "0.01")
+        lr.market_order = self._order("SELL", fill=-1)
+        lr.token_balance = lambda client, tok: 40.0
+
+        def run(size, fill, adopted=0.0):
+            self.logs = []
+            t = lr.GameTrader("gv", RES, "HOME", True)
+            p = {"gid": "gv", "ch": "DL", "token": "td", "outcome": "Dog",
+                 "entry": 0.55, "size": size, "t_in": time.time(),
+                 "el_in": 1300.0, "style": "settle", "tp": None,
+                 "selling": True, "position_id": "A1",
+                 "fill_shares": fill, "adopted": adopted}
+            t.positions.append(p)
+            t._sell(p)
+            return [r for r in self.logs if r.get("ev") == "size_unbacked"]
+
+        self.assertEqual(run(4.0, 4.0), [], "own fill: nothing to flag")
+        self.assertEqual(run(6.0, 4.0, 2.0), [], "adopted by the wallet: fine")
+        flagged = run(6.0, 4.0)
+        self.assertEqual(len(flagged), 1, "unbacked size must be logged")
+        self.assertAlmostEqual(flagged[0]["fill_shares"], 4.0)
+        self.assertEqual(flagged[0]["position_id"], "A1")
+
     # ---- a shared token must not make one channel sell another's shares ----
     def _sweep(self, balance, sibling):
         """Run one sell with a sibling position on the same token; return posts."""

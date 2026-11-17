@@ -8,7 +8,7 @@ remote=$1
 directory=$2
 requested=$3
 if [[ $requested =~ ^[0-9a-fA-F]{40}$ ]]; then
-  ref=${requested,,}
+  ref=$(printf '%s' "$requested" | tr 'A-F' 'a-f')
 else
   git check-ref-format "refs/heads/$requested" || fail "Invalid release branch: $requested"
   ref="refs/heads/$requested"

@@ -53,7 +53,7 @@ class ReleaseSelectionTests(unittest.TestCase):
         self.deploy("main")
         self.assertEqual(self.git(self.work, "rev-parse", "HEAD"), self.first)
         self.git(self.work, "checkout", "-b", "other")
-        output = self.deploy(self.second)
+        output = self.deploy(self.second.upper())
         self.assertIn(self.first, output)
         self.assertIn(self.second, output)
         self.assertEqual(self.git(self.work, "rev-parse", "HEAD"), self.second)
@@ -61,7 +61,7 @@ class ReleaseSelectionTests(unittest.TestCase):
 
     def test_pinned_install_and_branch_update_with_local_runtime_data(self):
         self.work.mkdir()
-        self.deploy(self.first)
+        self.deploy(self.first.upper())
         log = self.work / "data/live_trade_final/today/events.jsonl"
         log.parent.mkdir(parents=True)
         log.write_text("record")

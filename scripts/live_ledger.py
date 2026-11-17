@@ -85,6 +85,21 @@ class AttemptLedger:
                      order_id, SUBMITTING, 1, int(signal_at), el_in, now))
                 self.db.commit()
                 return aid, True
+            if action == "CLOSE":
+                # A sell can legitimately need several attempts: a FOK that
+                # misses a thin book, or a partial fill leaves shares behind.
+                # A repeat sell of shares already sold is rejected by the
+                # exchange, so a fresh attempt cannot double the position --
+                # unlike OPEN, which stays one-per-game/channel.
+                aid = uuid.uuid4().hex.upper()
+                self.db.execute(
+                    "UPDATE attempts SET attempt_id=?, order_id=?, state=?, "
+                    "attempt_no=attempt_no+1, signal_at=?, el_in=?, updated_at=? "
+                    "WHERE attempt_id=?",
+                    (aid, order_id, SUBMITTING, int(signal_at), el_in, now,
+                     row["attempt_id"]))
+                self.db.commit()
+                return aid, True
             if row["state"] == REJECTED_ZERO and row["attempt_no"] < 2:
                 aid = uuid.uuid4().hex.upper()
                 self.db.execute(

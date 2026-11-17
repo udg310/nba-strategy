@@ -194,6 +194,28 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertNotIn(("g1", "D", "Fav"), plan)
         self.assertIn(("g1", "D"), done)
 
+    # ---- cross-UTC-midnight restart must still find yesterday's buys ----
+    def test_resume_reads_previous_day(self):
+        root = os.path.join(lr.ROOT, "data", "live_trade_final")
+        yd = os.path.join(root, "2026-11-19", "_test_resumeA")
+        td = os.path.join(root, "2026-11-20", "_test_resumeB")
+        os.makedirs(yd, exist_ok=True)
+        os.makedirs(td, exist_ok=True)
+        with open(os.path.join(yd, "events.jsonl"), "w") as f:
+            f.write(json.dumps({"ev": "buy", "gid": "gYday", "ch": "C",
+                                "outcome": "Dog", "entry": 0.29,
+                                "filled_shares": 8.0, "el_in": 290.0}) + "\n")
+        old = lr.TODAY
+        lr.TODAY = "2026-11-20"          # today's dir holds no trace of it
+        try:
+            plan, done = lr.resume_plan()
+        finally:
+            lr.TODAY = old
+            shutil.rmtree(yd, ignore_errors=True)
+            shutil.rmtree(td, ignore_errors=True)
+        self.assertIn(("gYday", "C", "Dog"), plan)
+        self.assertEqual(plan[("gYday", "C", "Dog")][0], 0.29)
+
     # ---- a 200 with success:false is UNKNOWN, never a retryable rejection ----
     def test_buy_200_success_false_is_posted_no_retry(self):
         lr.book = lambda client, tok: (0.76, 0.75, "0.01")
@@ -229,6 +251,47 @@ class LiveRunnerFixes(unittest.TestCase):
         row = lr.LEDGER.rows("gr")[0]
         self.assertEqual(row["state"], "UNKNOWN")
         self.assertTrue(lr.LEDGER.has_open("gr", "A"))
+
+    # ---- a sell may retry; a buy may not (duplicate OPEN stays blocked) ----
+    def test_ledger_allows_repeated_close(self):
+        a1, ok1 = lr.LEDGER.begin("gc", "C", "CLOSE", "o1", 1)
+        self.assertTrue(ok1)
+        a2, ok2 = lr.LEDGER.begin("gc", "C", "CLOSE", "o2", 2)
+        self.assertTrue(ok2, "a second sell attempt must be allowed")
+        self.assertNotEqual(a1, a2)
+        self.assertTrue(lr.LEDGER.begin("gc", "A", "OPEN", "b1", 1)[1])
+        self.assertFalse(lr.LEDGER.begin("gc", "A", "OPEN", "b2", 2)[1])
+
+    # ---- a FOK that never fills is re-posted, not waited out ----
+    def test_sell_reposts_when_fok_never_fills(self):
+        old = (lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP,
+               lr.book, lr.market_order, lr.token_balance)
+        lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP = 1.0, 0.02, 0.005
+        posts = []
+
+        def fake_post(client, token, side, amount, price, tick, on_prepared=None):
+            posts.append(price)
+            oid = f"o{len(posts)}"
+            if on_prepared:
+                on_prepared(oid)
+            return {"success": True, "orderID": oid}, oid
+
+        lr.book = lambda client, tok: (0.55, 0.50, "0.01")
+        lr.market_order = fake_post
+        lr.token_balance = lambda client, tok: 4.46
+        try:
+            t = lr.GameTrader("gr", RES, "HOME", True)
+            p = {"gid": "gr", "ch": "C", "token": "td", "outcome": "Dog",
+                 "entry": 0.40, "size": 4.46, "t_in": time.time(),
+                 "el_in": 100.0, "style": "process", "tp": 0.20,
+                 "selling": True, "exit_reason": "target"}
+            t.positions.append(p)
+            t._sell(p)
+        finally:
+            (lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP,
+             lr.book, lr.market_order, lr.token_balance) = old
+        self.assertGreaterEqual(len(posts), 2,
+                                "must repost after the FOK misses")
 
     # ---- token shares we did not account for are added to the position ----
     def test_balance_extra_added(self):
@@ -296,6 +359,17 @@ class LiveRunnerFixes(unittest.TestCase):
         spec = lr.channel_spec("L")
         self.assertEqual(spec["side"], "fav")
         self.assertEqual(spec["style"], "settle")
+
+    # ---- back-to-back same teams: the neighbour night's market is rejected ----
+    def test_market_must_match_game_date(self):
+        start = "2026-11-17T01:00Z"          # this game's tip-off (UTC)
+        same_night = {"endDate": "2026-11-17T01:00:00Z"}
+        next_night = {"endDate": "2026-11-18T01:00:00Z"}
+        self.assertTrue(lr._market_matches_game(same_night, start))
+        self.assertFalse(lr._market_matches_game(next_night, start))
+        # unknown / unparseable dates must not break resolution
+        self.assertTrue(lr._market_matches_game({}, start))
+        self.assertTrue(lr._market_matches_game({"endDate": "garbage"}, start))
 
 
 if __name__ == "__main__":

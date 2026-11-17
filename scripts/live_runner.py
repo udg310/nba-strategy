@@ -52,13 +52,15 @@ POLL = 3
 
 STAKE_FRAC = float(os.environ.get("STAKE_FRAC", "0.05"))
 MIN_ORDER = 1.0
-MAX_OPEN = 5
+# Slot caps.  Set high (default: effectively unlimited) so a good slate is not
+# throttled; the cash reserve and the stake sizing still bound total exposure.
+MAX_OPEN = int(os.environ.get("MAX_OPEN", "999"))
 CASH_RESERVE = 0.20
 
 # Lock channel: buy the favourite once it leads by >= LOCK_MARGIN (any time),
 # hold to settlement.  Separate pool and slot cap so it never crowds A/C/D.
 LOCK_FRAC = float(os.environ.get("LOCK_FRAC", "0.10"))
-MAX_OPEN_LOCK = 3
+MAX_OPEN_LOCK = int(os.environ.get("MAX_OPEN_LOCK", "999"))
 LOCK_MARGIN = 12.0
 LOCK_ENABLED = os.environ.get("LOCK_ENABLED", "0") == "1"
 LOCK_CH = {"style": "settle", "side": "fav", "weight": 1.0, "tp": None,
@@ -79,6 +81,7 @@ def channel_spec(ch):
 
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
 SELL_WINDOW = 900
+REPOST_AFTER = 30        # seconds to wait before re-checking an unfilled sell
 MAX_SLIP = 0.03
 RETRY_GAP = 3
 DUST = 0.02              # shares; below this a position is closed for accounting
@@ -256,6 +259,25 @@ def _round_down_tick(x, tick):
 
 
 # ------------------------------------------------------------------ market
+def _market_matches_game(mk, start_iso):
+    """Does this market belong to *this* game?
+
+    Polymarket slugs use the US game date while a game's `start` is UTC, so a
+    back-to-back between the same teams a day apart can match the wrong slug.
+    A market's own endDate equals its game's tip-off, so compare it to ours; a
+    neighbouring game is a full day away and must be rejected.
+    """
+    end = mk.get("endDate") or mk.get("end_date_iso") or mk.get("end_date")
+    if not end or not start_iso:
+        return True          # cannot verify; keep previous behaviour
+    try:
+        a = datetime.fromisoformat(str(start_iso).replace("Z", "+00:00"))
+        b = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+    except Exception:
+        return True
+    return abs((b - a).total_seconds()) <= 6 * 3600
+
+
 def resolve(g, client):
     a = nd.pm_abbr(g["away"])
     h = nd.pm_abbr(g["home"])
@@ -279,6 +301,8 @@ def resolve(g, client):
         mk = next((m for m in (ev[0].get("markets") or []) if m.get("slug") == slug), None)
         if not mk:
             continue
+        if not _market_matches_game(mk, base):
+            continue          # slug matched a neighbouring game (back-to-back)
         outs, toks = mk.get("outcomes"), mk.get("clobTokenIds")
         try:
             outs = json.loads(outs) if isinstance(outs, str) else outs
@@ -466,10 +490,17 @@ class GameTrader(threading.Thread):
             bal = balance(self.client)
             if bal is None:
                 continue
+            # Size off total equity (cash + open positions at cost), not cash
+            # alone.  Otherwise every new position shrinks the next one, and
+            # with the slot caps lifted a busy slate would size itself to dust.
+            # CASH_RESERVE still caps each individual order.
+            with LOCK:
+                deployed = sum(p["size"] * p["entry"] for p in ALL_POSITIONS)
+            equity = bal + deployed
             if key == "L":
-                usd = min(bal * LOCK_FRAC, bal * (1 - CASH_RESERVE))
+                usd = min(equity * LOCK_FRAC, bal * (1 - CASH_RESERVE))
             else:
-                usd = min(bal * STAKE_FRAC * ch["weight"], bal * (1 - CASH_RESERVE))
+                usd = min(equity * STAKE_FRAC * ch["weight"], bal * (1 - CASH_RESERVE))
             if usd < MIN_ORDER:
                 log({"ev": "signal_skip_cash", "gid": self.gid, "ch": key,
                      "usd": round(usd, 2), "balance": round(bal, 2)})
@@ -886,7 +917,15 @@ class GameTrader(threading.Thread):
             # safe.  A second sell of already-sold shares would be rejected by
             # the exchange anyway, so this cannot double the position.
             if posted:
-                if posted_unknown and time.time() - posted_at > 30:
+                # A FOK that cannot fill (thin book at the limit, or the bid
+                # moved between the exit and the post) is killed on arrival yet
+                # still reports "posted".  Waiting out the full SELL_WINDOW on
+                # it freezes the position -- and blocks _manage_exits via
+                # p["selling"] -- while the price runs away.  After 30s check
+                # the shares again; if they are still ours the order did not
+                # fill, so repost at the new bid.  Selling already-sold shares
+                # would be rejected by the exchange, so this cannot double.
+                if time.time() - posted_at > REPOST_AFTER:
                     same = [x for x in self.positions
                             if x["token"] == p["token"] and x is not p]
                     bal = token_balance(self.client, p["token"]) if not same else None
@@ -1015,12 +1054,25 @@ def resume_plan():
     Rebuild each position as bought - sold, so a restart does not resurrect
     a closed position (the old code only looked at buys).
     """
-    base = os.path.join(ROOT, "data", "live_trade_final", TODAY)
     pos, done = {}, set()
-    if not os.path.isdir(base):
-        return pos, done
-    for run in sorted(os.listdir(base)):
-        fp = os.path.join(base, run, "events.jsonl")
+    # Read yesterday as well as today.  A session that began before UTC
+    # midnight and was restarted after it used to find an empty directory,
+    # lose every entry (defaulting them to 0.5) and let the C time exit fire
+    # instantly at a collapsed price.  Older day first, so buy-then-sell
+    # ordering still holds.
+    from datetime import timedelta
+    try:
+        days = [(datetime.strptime(TODAY, "%Y-%m-%d")
+                 + timedelta(days=off)).strftime("%Y-%m-%d") for off in (-1, 0)]
+    except Exception:
+        days = [TODAY]
+    files = []
+    for day in days:
+        base = os.path.join(ROOT, "data", "live_trade_final", day)
+        if os.path.isdir(base):
+            files += [os.path.join(base, r, "events.jsonl")
+                      for r in sorted(os.listdir(base))]
+    for fp in files:
         if not os.path.exists(fp):
             continue
         with open(fp) as f:

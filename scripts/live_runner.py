@@ -166,6 +166,10 @@ def _frac_of(ch):
 
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
 SELL_WINDOW = 900
+# `_sell` runs inside the game's trader thread, so a sell that cannot fill
+# freezes every other position in that game -- including a DL margin stop on
+# a collapsing lead.  A stop must not hold the thread for the full window.
+STOP_SELL_WINDOW = 120
 REPOST_AFTER = 30        # seconds to wait before re-checking an unfilled sell
 MAX_SLIP = 0.03
 RETRY_GAP = 3
@@ -1087,7 +1091,9 @@ class GameTrader(threading.Thread):
         share of dust (size precision is 2dp), which is treated as closed
         instead of retrying for 15 minutes.
         """
-        deadline = time.time() + SELL_WINDOW
+        window = (STOP_SELL_WINDOW if p.get("exit_reason") == "margin_stop"
+                  else SELL_WINDOW)
+        deadline = time.time() + window
         seen = self._trade_ids(p["token"])
         t0 = int(time.time())
         last = "no_attempt"
@@ -1172,12 +1178,20 @@ class GameTrader(threading.Thread):
                 last = info.get("err")
                 if info.get("terminal"):
                     # nothing to sell: stop this attempt instead of hammering
-                    # the book every RETRY_GAP for the whole window
+                    # the book every RETRY_GAP for the whole window.  Once the
+                    # game is final this must still close the position, or the
+                    # trader never goes flat and the day never ends.
                     p["selling"] = False
                     log({"ev": "sell_gave_up", "gid": self.gid, "ch": p["ch"],
                          "outcome": p["outcome"],
                          "reason": p.get("exit_reason"),
                          "remaining": round(p["size"], 6), "last": last})
+                    if finished:
+                        log({"ev": "reconcile_closed", "gid": self.gid,
+                             "ch": p["ch"], "outcome": p["outcome"],
+                             "why": "game over, not ours to sell",
+                             "size": round(p["size"], 6)})
+                        self._drop(p)
                     return
             time.sleep(RETRY_GAP)
         p["selling"] = False

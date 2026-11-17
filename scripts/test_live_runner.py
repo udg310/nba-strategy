@@ -353,9 +353,10 @@ class LiveRunnerFixes(unittest.TestCase):
 
     # ---- a FOK that never fills is re-posted, not waited out ----
     def test_sell_reposts_when_fok_never_fills(self):
-        old = (lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP,
-               lr.book, lr.market_order, lr.token_balance)
-        lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP = 1.0, 0.02, 0.005
+        old = (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+               lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance)
+        lr.SELL_WINDOW, lr.STOP_SELL_WINDOW = 1.0, 1.0
+        lr.REPOST_AFTER, lr.RETRY_GAP = 0.02, 0.005
         posts = []
 
         def fake_post(client, token, side, amount, price, tick, on_prepared=None):
@@ -378,8 +379,8 @@ class LiveRunnerFixes(unittest.TestCase):
             t.positions.append(p)
             t._sell(p)
         finally:
-            (lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP,
-             lr.book, lr.market_order, lr.token_balance) = old
+            (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+             lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance) = old
         self.assertGreaterEqual(len(posts), 2,
                                 "must repost after the FOK misses")
 
@@ -539,9 +540,10 @@ class LiveRunnerFixes(unittest.TestCase):
     # ---- a shared token must not make one channel sell another's shares ----
     def _sweep(self, matched, balance=8.0, sibling=4.0):
         """Run one sell with a sibling position on the same token; return posts."""
-        old = (lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP,
-               lr.book, lr.market_order, lr.token_balance)
-        lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP = 0.4, 0.02, 0.005
+        old = (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+               lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance)
+        lr.SELL_WINDOW, lr.STOP_SELL_WINDOW = 0.4, 0.4
+        lr.REPOST_AFTER, lr.RETRY_GAP = 0.02, 0.005
         posts = []
 
         def fake_post(client, token, side, amount, price, tick, on_prepared=None):
@@ -567,8 +569,8 @@ class LiveRunnerFixes(unittest.TestCase):
             t.positions.extend([sib, p])
             t._sell(p)
         finally:
-            (lr.SELL_WINDOW, lr.REPOST_AFTER, lr.RETRY_GAP,
-             lr.book, lr.market_order, lr.token_balance) = old
+            (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
+             lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance) = old
         return posts
 
     def test_repost_ignores_the_shared_balance(self):

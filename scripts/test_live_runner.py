@@ -18,16 +18,9 @@ RES = {"fav": "Fav", "outcomes": ["Fav", "Dog"], "tokens": ["tf", "td"], "pre": 
 class FakeClient:
     def __init__(self):
         self.trades = []
-        # what GET /order/{id} answers; None means "no evidence"
-        self.matched = None
 
     def get_trades(self, params):
         return list(self.trades)
-
-    def get_order(self, oid):
-        if self.matched is None:
-            return None
-        return {"size_matched": str(self.matched)}
 
 
 class LiveRunnerFixes(unittest.TestCase):
@@ -254,6 +247,27 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertNotIn(p, t.positions)
         self.assertTrue(any(r.get("reason") == "time" for r in self.logs))
 
+    # ---- resume allocation never inflates a known channel ----
+    def test_split_resume_does_not_inflate_a_known_channel(self):
+        # A provably bought 4; C's shares are unknown (ledger only); wallet 8.
+        # Old code scaled A by 8/4 -> A=8, then C=4 -> 12.  Correct is A=4, C=4.
+        a, c = lr.split_resume([4.0, 0.0], 8.0)
+        self.assertAlmostEqual(a, 4.0)
+        self.assertAlmostEqual(c, 4.0)
+
+    def test_split_resume_scales_down_only_when_overcounted(self):
+        # both known at 4 each but the wallet only has 7: one sell was lost
+        a, c = lr.split_resume([4.0, 4.0], 7.0)
+        self.assertAlmostEqual(a + c, 7.0)
+        self.assertLessEqual(a, 4.0)
+        self.assertLessEqual(c, 4.0)
+
+    def test_split_resume_unknown_order_does_not_matter(self):
+        # the unknown channel is listed first: it must not grab everything
+        c, a = lr.split_resume([0.0, 4.0], 8.0)
+        self.assertAlmostEqual(a, 4.0)
+        self.assertAlmostEqual(c, 4.0)
+
     # ---- resume buys - sold ----
     def test_resume_ledger(self):
         base = os.path.join(lr.ROOT, "data", "live_trade_final", "_test_resume")
@@ -372,7 +386,6 @@ class LiveRunnerFixes(unittest.TestCase):
         lr.book = lambda client, tok: (0.55, 0.50, "0.01")
         lr.market_order = fake_post
         lr.token_balance = lambda client, tok: 4.46
-        self.fake.matched = 0.0        # the exchange killed the FOK: 0 matched
         try:
             t = lr.GameTrader("gr", RES, "HOME", True)
             p = {"gid": "gr", "ch": "C", "token": "td", "outcome": "Dog",
@@ -524,7 +537,6 @@ class LiveRunnerFixes(unittest.TestCase):
         lr.book = lambda client, tok: (0.70, 0.68, "0.01")
         lr.market_order = self._order("SELL", fill=None)   # never fills
         lr.token_balance = lambda client, tok: 40.0
-        self.fake.matched = None                           # no evidence
         lr.DOGLOCK_CH["stop_margin_hi"] = -5.0             # stop armed
         try:
             t = lr.GameTrader("gh", RES, "HOME", True)
@@ -571,66 +583,6 @@ class LiveRunnerFixes(unittest.TestCase):
         t.log_reconcile()
         row = [r for r in self.logs if r.get("ev") == "reconcile_summary"][0]
         self.assertTrue(row["clean"])
-
-    # ---- a FOK that says "accepted" but traded nothing is retried at once ----
-    def _sell_posts(self, response, window=0.3):
-        old = (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
-               lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance)
-        lr.SELL_WINDOW, lr.STOP_SELL_WINDOW = window, window
-        lr.REPOST_AFTER, lr.RETRY_GAP = 0.05, 0.01
-        posts = []
-
-        def fake_post(client, token, side, amount, price, tick,
-                      on_prepared=None):
-            oid = f"o{len(posts) + 1}"
-            posts.append(oid)
-            if on_prepared:
-                on_prepared(oid)
-            return response, oid
-        lr.book = lambda client, tok: (0.60, 0.55, "0.01")
-        lr.market_order = fake_post
-        lr.token_balance = lambda client, tok: 40.0
-        self.fake.matched = None
-        try:
-            t = lr.GameTrader("gq", RES, "HOME", True)
-            p = {"gid": "gq", "ch": "A", "token": "td", "outcome": "Dog",
-                 "entry": 0.41, "size": 4.0, "t_in": time.time(),
-                 "el_in": 1468.0, "style": "process", "tp": 0.20,
-                 "selling": True, "exit_reason": "target"}
-            t.positions.append(p)
-            t._sell(p)
-        finally:
-            (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
-             lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance) = old
-        return posts
-
-    def test_accepted_without_trade_ids_is_retried(self):
-        self.assertGreaterEqual(
-            len(self._sell_posts({"success": True})), 2,
-            "an accepted-but-unfilled FOK must be re-posted immediately")
-
-    def test_zero_fill_retries_are_bounded(self):
-        # the inference cannot run away: at most 6 immediate re-posts, then
-        # the position waits for the next tick with a fresh bid
-        posts = self._sell_posts({"success": True}, window=5.0)
-        self.assertLessEqual(len(posts), 7, f"posted {len(posts)} times")
-
-    def test_delayed_order_is_not_reposted(self):
-        self.assertEqual(
-            len(self._sell_posts({"success": True, "status": "DELAYED"})), 1,
-            "a delayed order may still fill: never duplicate it")
-
-    def test_reply_with_trade_ids_is_not_reposted(self):
-        self.assertEqual(
-            len(self._sell_posts({"success": True, "tradeIDs": ["t1"]})), 1)
-
-    def test_order_hash_mismatch_is_not_treated_as_zero_fill(self):
-        # the exchange answered with a DIFFERENT order id: that is "review
-        # required", never "re-post at once".  The zero-fill inference must
-        # not override it.
-        posts = self._sell_posts({"success": True, "orderID": "other-hash"})
-        self.assertEqual(len(posts), 1,
-                         "a hash mismatch must stop the retry loop, not re-post")
 
     # ---- the sell clock starts after the trade lookup, not before ----
     def test_sell_window_starts_after_the_trade_lookup(self):
@@ -689,56 +641,37 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertAlmostEqual(flagged[0]["fill_shares"], 4.0)
         self.assertEqual(flagged[0]["position_id"], "A1")
 
-    # ---- a shared token must not make one channel sell another's shares ----
-    def _sweep(self, matched, balance=8.0, sibling=4.0):
-        """Run one sell with a sibling position on the same token; return posts."""
+    # ---- a parallel sell must not claim another channel's fill ----
+    def test_sell_does_not_scan_for_fills_before_posting(self):
         old = (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
                lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance)
-        lr.SELL_WINDOW, lr.STOP_SELL_WINDOW = 0.4, 0.4
-        lr.REPOST_AFTER, lr.RETRY_GAP = 0.02, 0.005
-        posts = []
-
-        def fake_post(client, token, side, amount, price, tick, on_prepared=None):
-            posts.append(amount)
-            oid = f"o{len(posts)}"
-            if on_prepared:
-                on_prepared(oid)
-            return {"success": True, "orderID": oid, "status": "LIVE"}, oid
+        lr.SELL_WINDOW, lr.STOP_SELL_WINDOW = 0.3, 0.3
+        lr.REPOST_AFTER, lr.RETRY_GAP = 0.05, 0.01
         lr.book = lambda client, tok: (0.55, 0.50, "0.01")
-        lr.market_order = fake_post
-        lr.token_balance = lambda client, tok: balance
-        self.fake.matched = matched
+        lr.token_balance = lambda client, tok: 40.0
+        lr.market_order = self._order("SELL", fill=None)   # our order never fills
+        t = lr.GameTrader("gn", RES, "HOME", True)
+        c = {"gid": "gn", "ch": "C", "token": "td", "outcome": "Dog",
+             "entry": 0.40, "size": 4.0, "t_in": time.time(), "el_in": 300.0,
+             "style": "process", "tp": 0.20, "selling": True,
+             "exit_reason": "target"}
+        t.positions.append(c)
+        # A's parallel fill: _fills would return it if asked with order_id=None
+        # (the pre-post scan).  The sell must not claim it as C's.
+        def bad_fills(self, token, side, seen, t0, order_id=None):
+            if order_id is None:
+                return [{"id": "ta", "size": "4.0", "price": "0.60"}]
+            return []
+        orig = lr.GameTrader._fills
+        lr.GameTrader._fills = bad_fills
         try:
-            t = lr.GameTrader("gs", RES, "HOME", True)
-            sib = {"gid": "gs", "ch": "A", "token": "td", "outcome": "Dog",
-                   "entry": 0.40, "size": sibling, "t_in": time.time(),
-                   "el_in": 100.0, "style": "process", "tp": 0.20,
-                   "selling": False}
-            p = {"gid": "gs", "ch": "DL", "token": "td", "outcome": "Dog",
-                 "entry": 0.55, "size": 4.0, "t_in": time.time(),
-                 "el_in": 1300.0, "style": "settle", "tp": None,
-                 "selling": True, "exit_reason": "margin_stop"}
-            t.positions.extend([sib, p])
-            t._sell(p)
+            t._sell(c)
         finally:
+            lr.GameTrader._fills = orig
             (lr.SELL_WINDOW, lr.STOP_SELL_WINDOW, lr.REPOST_AFTER,
              lr.RETRY_GAP, lr.book, lr.market_order, lr.token_balance) = old
-        return posts
-
-    def test_repost_ignores_the_shared_balance(self):
-        # The exchange says our sell matched 0 -> repost is safe.
-        self.assertGreaterEqual(len(self._sweep(matched=0.0)), 2)
-        # The exchange says our sell filled, but the balance API still shows
-        # every channel's shares.  Reposting here would sell A's position:
-        # one post only, no matter what the balance reads.
-        self.assertEqual(len(self._sweep(matched=4.0, balance=8.0)), 1)
-        # No evidence at all -> wait, never guess.
-        self.assertEqual(len(self._sweep(matched=None, balance=8.0)), 1)
-
-    def test_repost_needs_exchange_evidence(self):
-        self.assertEqual(lr.order_matched(self.fake, ""), None)
-        self.fake.matched = 2.5
-        self.assertAlmostEqual(lr.order_matched(self.fake, "o1"), 2.5)
+        self.assertAlmostEqual(c["size"], 4.0,
+                               "a sell must not consume a fill before it posted")
 
     # ---- token shares we did not account for are added to the position ----
     def test_balance_extra_added(self):

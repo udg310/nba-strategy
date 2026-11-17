@@ -343,35 +343,6 @@ def _round_up_tick(x, tick):
     return round(math.ceil((x - 1e-9) / step) * step, 3 if step < 0.01 else 2)
 
 
-def order_matched(client, order_id):
-    """Shares the exchange says THIS order matched, or None if unknown.
-
-    The per-order record is the only ownership evidence that is not shared:
-    the token balance is the sum of every channel holding the token AND it
-    lags, so using it to decide "did my sell fill?" both double-sells and
-    sells a sibling's shares.
-    """
-    if not order_id:
-        return None
-    try:
-        o = client.get_order(order_id)
-    except Exception:
-        return None
-    if not isinstance(o, dict):
-        return None
-    for k in ("size_matched", "sizeMatched", "matched_size", "filled_size"):
-        v = o.get(k)
-        if v not in (None, ""):
-            try:
-                return float(v)
-            except (TypeError, ValueError):
-                pass
-    st = str(o.get("status") or "").upper()
-    if st in ("CANCELED", "CANCELLED", "UNMATCHED", "EXPIRED"):
-        return 0.0
-    return None
-
-
 def _round_down_tick(x, tick):
     step = _price_step(tick)
     return round(math.floor((x + 1e-9) / step) * step, 3 if step < 0.01 else 2)
@@ -1123,10 +1094,13 @@ class GameTrader(threading.Thread):
         posted_at = 0.0
         posted_unknown = False
         order_id = None
-        zero_retries = 0
         while time.time() < deadline and not self.stop_evt.is_set():
-            fills = self._fills(p["token"], "SELL", seen, t0,
-                                order_id if posted else None)
+            # Before this thread has posted there is no order to match, and a
+            # parallel sell of the same token (A and C both exit) would be
+            # claimed as ours by _fills' order_id=None branch.  Only look for
+            # a fill once we have our own order id.
+            fills = (self._fills(p["token"], "SELL", seen, t0, order_id)
+                     if posted else [])
             if fills:
                 sold = sum(float(t["size"]) for t in fills)
                 notional = sum(float(t["size"]) * float(t["price"]) for t in fills)
@@ -1167,25 +1141,19 @@ class GameTrader(threading.Thread):
             if posted:
                 # A FOK that cannot fill (thin book at the limit, or the bid
                 # moved between the exit and the post) is killed on arrival yet
-                # still reports "posted".  Waiting out the full SELL_WINDOW on
-                # it freezes the position -- and blocks _manage_exits via
-                # p["selling"] -- while the price runs away.  After 30s check
-                # the shares again; if they are still ours the order did not
-                # fill, so repost at the new bid.  Selling already-sold shares
-                # would be rejected by the exchange, so this cannot double.
+                # still reports "posted".  After REPOST_AFTER, ask the trade
+                # record whether OUR order id produced a fill: if it has not,
+                # the order was killed and it is safe to re-post at the new
+                # bid.  This is positive evidence -- the wallet balance is
+                # shared and lags, and GET /order returns None for filled
+                # orders, so neither of those can decide this.  A real fill is
+                # found by the `fills` branch above before we get here.
                 if time.time() - posted_at > REPOST_AFTER:
-                    # Repost only on positive evidence that OUR order matched
-                    # nothing.  The wallet balance is not evidence: it is the
-                    # sum of every channel on this token and it lags exactly
-                    # when it matters, so a filled sell reads as "still mine"
-                    # and the repost sells a sibling's shares.  No evidence
-                    # (API error, no order id) means wait, not guess.
-                    matched = order_matched(self.client, order_id)
-                    if matched is not None and matched <= DUST:
+                    if not self._fills(p["token"], "SELL", seen, t0, order_id):
                         posted = False
                         posted_unknown = False
                         order_id = None
-                        last = "exchange reports 0 matched"
+                        last = "no fill for our order after 30s"
                 time.sleep(RETRY_GAP)
                 continue
 
@@ -1199,20 +1167,6 @@ class GameTrader(threading.Thread):
                         f"{info.get('order_id')}")
             else:
                 last = info.get("err")
-                if info.get("zero_fill"):
-                    # "accepted but nothing traded" is an inference, so bound
-                    # it: if the exchange keeps saying that, stop hammering
-                    # and let the next tick try with a fresh bid.
-                    zero_retries += 1
-                    if zero_retries > 6:
-                        with LOCK:
-                            p["selling"] = False
-                        p["_retry_after"] = time.time() + 5
-                        log({"ev": "sell_gave_up", "gid": self.gid,
-                             "ch": p["ch"], "outcome": p["outcome"],
-                             "reason": p.get("exit_reason"),
-                             "remaining": round(p["size"], 6), "last": last})
-                        return
                 if info.get("terminal"):
                     # nothing to sell: stop this attempt instead of hammering
                     # the book every RETRY_GAP for the whole window.  Once the
@@ -1345,27 +1299,11 @@ class GameTrader(threading.Thread):
 
         c = classify_post(res, oid)
         state = c.get("state", "UNKNOWN")
-        # A FOK either fills the moment it lands or is killed.  A reply that
-        # only says "accepted" -- no trade ids to point at, and not held as a
-        # live/delayed order -- is an unfilled order, not an order in flight.
-        # Waiting the whole sell window on it is what left the Suns A position
-        # sitting for two 15-minute stretches while the price ran away.
-        #
-        # But the inference must never override a hash mismatch: that is the
-        # one reply that means "the exchange signed something different from
-        # what we sent", and re-posting on top of it is exactly the mistake
-        # the order-id-mismatch check exists to prevent.
-        inferred = False
-        if (state != "REJECTED_ZERO"
-                and c.get("reason") != "exchange order hash differs; review required"
-                and isinstance(res, dict)
-                and not any(res.get(k) for k in ("tradeIDs",
-                                                 "transactionsHashes"))
-                and str(res.get("status") or "").upper()
-                not in ("DELAYED", "LIVE", "MATCHED")):
-            state = "REJECTED_ZERO"
-            c = {"state": state, "reason": "accepted without trade ids"}
-            inferred = True
+        # A reply that says "accepted" but carries no trade ids is still
+        # "in flight": the fill shows up in the trade record (a separate
+        # query), never here.  Inferring "zero fill" from the reply alone is
+        # how a real fill got re-posted 7 times.  The re-post decision lives
+        # in _sell, where it can watch the trade record for our order id.
         if LEDGER is not None and prepared.get("aid"):
             LEDGER.finish(prepared["aid"],
                           "REJECTED_ZERO" if state == "REJECTED_ZERO"
@@ -1374,8 +1312,7 @@ class GameTrader(threading.Thread):
         if state == "REJECTED_ZERO":
             return "rejected", {"err": c.get("reason") or "FOK unfilled",
                                 "size": qty, "bid": bid, "order_id": oid,
-                                "retryable": c.get("retryable", False),
-                                "zero_fill": inferred}
+                                "retryable": c.get("retryable", False)}
         return "posted", {"err": None, "size": qty, "bid": bid,
                           "order_id": oid, "res": res, "state": state}
 
@@ -1490,6 +1427,26 @@ def resume_plan():
                            v.get("order_id"), v.get("attempt_id"),
                            v.get("position_id"))
     return open_pos, done
+
+
+def split_resume(owns, held):
+    """Divide a token's wallet balance across the channels that claim it.
+
+    `owns` are each channel's provable shares (from the log, or the ledger's
+    recorded fill); 0 means unknown.  Known channels are scaled DOWN only --
+    a missing sell record over-counts the wallet -- never up, so an unknown
+    channel's shares cannot inflate the channels we do know.  The unknown
+    channel takes only what is genuinely left over, regardless of order.
+    Returns a list of allocs parallel to `owns`.
+    """
+    total = sum(o for o in owns if o > 0)
+    scale = min(1.0, held / total) if total > 0 else 1.0
+    allocs = [0.0] * len(owns)
+    allocated = 0.0
+    for i in sorted(range(len(owns)), key=lambda i: owns[i] > 0, reverse=True):
+        allocs[i] = owns[i] * scale if owns[i] > 0 else max(0.0, held - allocated)
+        allocated += allocs[i]
+    return allocs
 
 
 # ------------------------------------------------------------------ main
@@ -1615,31 +1572,27 @@ def run(live):
                         held = sum(x[3] for x in items)
                     if held is None or held < DUST:
                         continue
-                    ev_sizes = sum(x[3] for x in items if x[3] > 0)
-                    total = ev_sizes
-                    scale = held / total if total > 0 else 1.0
-                    remaining = max(0.0, held - ev_sizes)
+                    # Each channel's own size: from the log (bought - sold)
+                    # when it has one, else from the ledger's recorded fill.
+                    # The old code scaled only the log sizes against the whole
+                    # wallet, so a ledger-only channel (C) made scale > 1 and
+                    # inflated A to 8 shares: A8 + C4 = 12 against a wallet
+                    # holding 8.  Scale against every known size instead.
+                    rows = []
                     for ch, outcome, entry, size, t_in, el_in, order_id, \
                             attempt_id, position_id in items:
-                        if size > 0:
-                            # rebuilt from the event log (bought - sold),
-                            # scaled so the set cannot exceed the wallet
-                            alloc = size * scale
-                        else:
-                            # ledger-only attempt: the log never recorded it,
-                            # so it may only take shares the wallet is not
-                            # already accounting for.  Never at its full fill
-                            # size -- those shares are usually the channels
-                            # that ARE in the log, already counted above.
-                            want = remaining
-                            if attempt_id and LEDGER is not None:
-                                led_shares, led_px = LEDGER.filled_of(attempt_id)
-                                if led_shares and led_shares > DUST:
-                                    want = min(led_shares, remaining)
-                                    if (entry is None or entry <= 0) and led_px:
-                                        entry = led_px
-                            alloc = min(want, remaining)
-                            remaining = max(0.0, remaining - alloc)
+                        own = size
+                        if own <= 0 and attempt_id and LEDGER is not None:
+                            led_shares, led_px = LEDGER.filled_of(attempt_id)
+                            if led_shares and led_shares > DUST:
+                                own = led_shares
+                                if (entry is None or entry <= 0) and led_px:
+                                    entry = led_px
+                        rows.append([ch, outcome, entry, size, t_in, el_in,
+                                     order_id, attempt_id, position_id, own])
+                    allocs = split_resume([r[9] for r in rows], held)
+                    for (ch, outcome, entry, size, t_in, el_in, order_id, \
+                         attempt_id, position_id, own), alloc in zip(rows, allocs):
                         if alloc < DUST:
                             continue
                         # An attempt without an event has no entry price;

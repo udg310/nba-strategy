@@ -589,6 +589,23 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertTrue(lr._market_matches_game({}, start))
         self.assertTrue(lr._market_matches_game({"endDate": "garbage"}, start))
 
+    # ---- one line per game: wallet vs what the trader thinks it holds ----
+    def test_reconcile_summary_reports_leftover_shares(self):
+        self.enterContext(patch.object(lr, "RECONCILE_GRACE", 0))
+        lr.token_balance = lambda client, tok: 3.5      # never attributed
+        t = lr.GameTrader("gm", RES, "HOME", True)
+        t.tokens_seen.add("td")
+        t.log_reconcile()
+        row = [r for r in self.logs if r.get("ev") == "reconcile_summary"][0]
+        self.assertFalse(row["clean"])
+        self.assertAlmostEqual(row["tokens"]["td"]["held"], 3.5)
+        # a clean game says so and stays quiet about the numbers
+        self.logs = []
+        lr.token_balance = lambda client, tok: 0.0
+        t.log_reconcile()
+        row = [r for r in self.logs if r.get("ev") == "reconcile_summary"][0]
+        self.assertTrue(row["clean"])
+
 
 if __name__ == "__main__":
     unittest.main()

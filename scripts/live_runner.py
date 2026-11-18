@@ -161,6 +161,8 @@ def _frac_of(ch):
 
 
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
+RECONCILE_GRACE = 5      # seconds to let the balance API catch up before reporting
+RECONCILE_DUST = 0.02    # shares; below this a token counts as back to zero
 MAX_SLIP = 0.03
 
 TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -553,6 +555,7 @@ class GameTrader(threading.Thread):
         self.pending = set()
         self.positions = []
         self.inflight = {}
+        self.tokens_seen = set()     # every token this game ever held
         self.final_processed = False
         if self.live and LEDGER is not None:
             try:
@@ -614,6 +617,7 @@ class GameTrader(threading.Thread):
 
     def _sync_position(self, q, shares, entry):
         key = q["ch"]
+        self.tokens_seen.add(q["token"])
         net = max(0., round(shares - LEDGER.sold_size(self.gid, key), 6))
         p = next((p for p in self.positions if p["ch"] == key), None)
         if net <= 1e-9:
@@ -644,6 +648,32 @@ class GameTrader(threading.Thread):
 
     def flat(self):
         return self.final_processed and not self.positions and not self.inflight
+
+    def log_reconcile(self):
+        """One line per game: the wallet vs what this trader says it holds.
+
+        Every token this game touched must be back to zero once the trader is
+        flat.  Anything still in the wallet there was never attributed to a
+        channel -- invisible to the P&L, invisible to the stop, but real.
+        """
+        if not self.tokens_seen:
+            return
+        held = {tok: token_balance(self.client, tok)
+                for tok in sorted(self.tokens_seen)}
+        if any(h is not None and h > RECONCILE_DUST for h in held.values()):
+            time.sleep(RECONCILE_GRACE)       # the balance API lags a sell
+            held = {tok: (token_balance(self.client, tok)
+                          if h is not None and h > RECONCILE_DUST else h)
+                    for tok, h in held.items()}
+        out = {}
+        for tok, h in held.items():
+            accounted = round(sum(p["size"] for p in self.positions
+                                  if p["token"] == tok), 6)
+            out[tok[:12]] = {"held": None if h is None else round(h, 6),
+                             "accounted": accounted}
+        log({"ev": "reconcile_summary", "gid": self.gid, "tokens": out,
+             "clean": all(v["held"] is None or v["held"] <= RECONCILE_DUST
+                          for v in out.values())})
 
     def run(self):
         log({"ev": "trader_start", "gid": self.gid, "fav": self.res.get("fav"),
@@ -1482,6 +1512,7 @@ def _poll_games(live, client, traders, pool, recovery, filled, done, pending):
             if t is not None:
                 t.put(g)
                 if final and t.flat():
+                    t.log_reconcile()
                     t.stop()
                     t.join()
                     del traders[gid]

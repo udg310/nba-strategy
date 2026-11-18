@@ -169,37 +169,6 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertTrue(any(r.get("reason") == "margin_stop" for r in self.logs))
         self.assertTrue(any(r.get("ev") == "sell" for r in self.logs))
 
-    # ---- DL margin stop is the mirror image of D's ----
-    def test_doglock_margin_stop_exits_when_lead_collapses(self):
-        lr.book = lambda client, tok: (0.42, 0.40, "0.01")
-        lr.market_order = self._order("SELL", fill=-1)
-        spec = dict(lr.DOGLOCK_CH, stop_margin_hi=-5.0)
-        orig = lr.channel_spec
-
-        def patched(ch):
-            return spec if ch == "DL" else orig(ch)
-        lr.channel_spec = patched
-        try:
-            t = lr.GameTrader("g5", RES, "HOME", True)
-            now = time.time()
-            # the dog led by 14 on entry and has now collapsed to +2
-            t.hist = [(now, 2200.0, -2.0, ("h", "a"))]
-            p = {"gid": "g5", "ch": "DL", "token": "td", "outcome": "Dog",
-                 "entry": 0.55, "size": 5.0, "t_in": now - 900,
-                 "el_in": 1300.0, "style": "settle", "tp": None,
-                 "selling": False}
-            self.hold(t, p)
-            t._manage_exits({"state": "in", "period": 4, "detail": "3:00",
-                             "home_score": 90, "away_score": 92}, now)
-        finally:
-            lr.channel_spec = orig
-        self.assertNotIn(p, t.positions)
-        self.assertTrue(any(r.get("reason") == "margin_stop" for r in self.logs))
-        self.assertTrue(any(r.get("ev") == "sell" for r in self.logs))
-
-    def test_doglock_margin_stop_ships_off(self):
-        self.assertIsNone(lr.DOGLOCK_CH["stop_margin_hi"])
-
     # ---- C 30 game-clock minute exit ----
     def test_c_game_clock_time_exit(self):
         lr.book = lambda client, tok: (0.52, 0.50, "0.01")
@@ -324,7 +293,7 @@ class LiveRunnerFixes(unittest.TestCase):
 
     # ---- a FOK that never fills is re-posted, not waited out ----
     def test_sell_reposts_when_fok_never_fills(self):
-        lr.book = lambda client, tok: (0.55, 0.50, "0.01")
+        lr.book = lambda client, tok: (0.70, 0.65, "0.01")
         lr.market_order = self._order()
         lr.token_balance = lambda client, tok: 4.46
         t = lr.GameTrader("gr", RES, "HOME", True)
@@ -343,48 +312,7 @@ class LiveRunnerFixes(unittest.TestCase):
         t._sell(p)
         self.assertEqual(len(self.orders), 2)
 
-    # ---- DL entry: no chasing a stale crossing, no re-pricing after a band miss ----
-    def _dl_signal(self, wall_age, ask=0.60, enable=True):
-        old = (lr.book, lr.book_depth, lr.balance, lr.market_order,
-               lr.DOGLOCK_ENABLED)
-        lr.book = lambda client, tok: (ask, ask - 0.01, "0.01")
-        lr.book_depth = lambda client, tok: {}
-        lr.balance = lambda client: 100.0
-        lr.market_order = self._order("BUY", fill=-1)
-        lr.DOGLOCK_ENABLED = enable
-        try:
-            t = lr.GameTrader("gd", RES, "HOME", True)
-            now = time.time()
-            t.hist = [(now - wall_age - 2, 790.0, -11.0, ("h", "a")),
-                      (now - wall_age, 800.0, -13.0, ("h", "a")),
-                      (now, 810.0, -13.0, ("h", "a"))]
-            g = {"state": "in", "period": 2, "detail": "6:00",
-                 "home_score": 40, "away_score": 53}
-            t._find_signals(g, now)
-        finally:
-            (lr.book, lr.book_depth, lr.balance, lr.market_order,
-             lr.DOGLOCK_ENABLED) = old
-        return "DL" in t.pending, "DL" in t.done
-
-    def test_doglock_enters_fresh_crossing(self):
-        pending, done = self._dl_signal(wall_age=5)
-        self.assertTrue(pending, "a fresh 12+ dog crossing must enter")
-
-    def test_doglock_skips_stale_crossing(self):
-        pending, done = self._dl_signal(wall_age=lr.DOGLOCK_CHASE + 60)
-        self.assertFalse(pending, "must not chase a crossing seen minutes ago")
-        self.assertFalse(done)
-
-    def test_doglock_band_miss_skips_game(self):
-        pending, done = self._dl_signal(wall_age=5, ask=0.30)   # below 0.45
-        self.assertFalse(pending)
-        self.assertTrue(done, "a band miss at the crossing must end DL for the game")
-
-    def test_doglock_disabled_by_default_flag(self):
-        pending, _ = self._dl_signal(wall_age=5, enable=False)
-        self.assertFalse(pending)
-
-    # ---- ownership: A/C/DL share one token, each position owns its own size ----
+    # ---- ownership: A/C/D share one token, each position owns its own size ----
     def test_sell_posts_our_size_not_the_shared_balance(self):
         lr.book = lambda client, tok: (0.55, 0.50, "0.01")
         lr.market_order = self._order("SELL", fill=-1)
@@ -394,7 +322,7 @@ class LiveRunnerFixes(unittest.TestCase):
                "entry": 0.40, "size": 4.0, "t_in": time.time(),
                "el_in": 300.0, "style": "process", "tp": 0.20,
                "selling": False}
-        p = {"gid": "gl", "ch": "DL", "token": "td", "outcome": "Dog",
+        p = {"gid": "gl", "ch": "D", "token": "td", "outcome": "Dog",
              "entry": 0.55, "size": 4.0, "t_in": time.time(),
              "el_in": 1300.0, "style": "settle", "tp": None,
              "selling": True, "exit_reason": "margin_stop"}
@@ -459,7 +387,7 @@ class LiveRunnerFixes(unittest.TestCase):
         def run(game, size, fill, adopted=0.0):
             self.logs = []
             t = lr.GameTrader(game, RES, "HOME", True)
-            p = {"gid": game, "ch": "DL", "token": "td", "outcome": "Dog",
+            p = {"gid": game, "ch": "D", "token": "td", "outcome": "Dog",
                  "entry": 0.55, "size": size, "t_in": time.time(),
                  "el_in": 1300.0, "style": "settle", "tp": None,
                  "selling": True,
@@ -482,7 +410,7 @@ class LiveRunnerFixes(unittest.TestCase):
         t = lr.GameTrader("gs", RES, "HOME", True)
         sib = dict(gid=t.gid, ch="A", token="td", outcome="Dog", entry=.40, size=4.,
                    el_in=100., style="process", tp=.20, selling=False)
-        p = dict(sib, ch="DL", style="settle", tp=None, selling=True, exit_reason="margin_stop")
+        p = dict(sib, ch="D", style="settle", tp=None, selling=True, exit_reason="margin_stop")
         self.hold(t, sib)
         self.hold(t, p)
         for wallet in (8., 8., 4.):
@@ -540,44 +468,6 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertEqual([r["size"] for r in lr.LEDGER.tasks()], [7.36])
         self.assertEqual(self.orders, [])
 
-    # ---- lock channel: fires on a 12-point favourite lead, buys the favourite ----
-    def test_lock_signal_and_spec(self):
-        evs = [(0, 0, 0), (100, 11, 100), (200, 12, 200), (300, 20, 300)]
-        s = lr.lock_signal(evs)
-        self.assertIsNotNone(s)
-        self.assertEqual(s["margin"], 12)
-        self.assertEqual(s["el"], 200)
-        self.assertIsNone(lr.lock_signal([(0, 0, 0), (100, 11, 100)]))
-        spec = lr.channel_spec("L")
-        self.assertEqual(spec["side"], "fav")
-        self.assertEqual(spec["style"], "settle")
-
-    # ---- dog lock: fires only from Q2 on, on the dog's side, in its own pool ----
-    def test_doglock_signal_gates_clock_and_side(self):
-        # a Q1 12-point dog lead must NOT trigger
-        q1 = [(100, -12, 100), (400, -15, 400)]
-        self.assertIsNone(lr.doglock_signal(q1))
-        # the same lead once Q2 starts does
-        q2 = [(100, -12, 100), (760, -13, 760), (900, -14, 900)]
-        s = lr.doglock_signal(q2)
-        self.assertIsNotNone(s)
-        self.assertEqual(s["margin"], -13)
-        self.assertEqual(s["el"], 760)
-        # favourite leads never trigger it
-        self.assertIsNone(lr.doglock_signal([(760, 12, 760), (900, 14, 900)]))
-        spec = lr.channel_spec("DL")
-        self.assertEqual(spec["side"], "dog")
-        self.assertEqual(spec["style"], "settle")
-
-    def test_doglock_has_own_slot_pool_and_frac(self):
-        self.assertEqual(lr._slot_pool("DL"), ("DL", lr.MAX_OPEN_DOGLOCK))
-        self.assertEqual(lr._slot_pool("L"), ("L", lr.MAX_OPEN_LOCK))
-        self.assertEqual(lr._slot_pool("A"), (None, lr.MAX_OPEN))
-        self.assertAlmostEqual(lr._frac_of("DL"), lr.DOGLOCK_FRAC)
-        # A/C/D keep their own weighting, untouched by the dog lock
-        self.assertAlmostEqual(lr._frac_of("D"),
-                               lr.STAKE_FRAC * lr.S.CHANNELS["D"]["weight"])
-
     # ---- back-to-back same teams: the neighbour night's market is rejected ----
     def test_market_must_match_game_date(self):
         start = "2026-11-17T01:00Z"          # this game's tip-off (UTC)
@@ -588,6 +478,47 @@ class LiveRunnerFixes(unittest.TestCase):
         # unknown / unparseable dates must not break resolution
         self.assertTrue(lr._market_matches_game({}, start))
         self.assertTrue(lr._market_matches_game({"endDate": "garbage"}, start))
+
+    # ---- optional streamed top-of-book: ws uses it, observe only compares ----
+    class _Books:
+        def __init__(self, cached):
+            self.cached_value = cached
+            self.subscribed = []
+
+        def subscribe(self, token, condition):
+            self.subscribed.append((token, condition))
+
+        def start(self):
+            return False
+
+        def cached(self, token):
+            return self.cached_value
+
+    def test_market_quote_ws_uses_cache_and_falls_back(self):
+        books = self._Books(("td", .70, .30))
+        old = (lr.MARKET_DATA, lr.MARKET_BOOKS, lr.book)
+        self.addCleanup(lambda: setattr(lr, "MARKET_DATA", old[0]))
+        self.addCleanup(lambda: setattr(lr, "MARKET_BOOKS", old[1]))
+        self.addCleanup(lambda: setattr(lr, "book", old[2]))
+        lr.MARKET_DATA, lr.MARKET_BOOKS = "ws", books
+        lr.book = lambda client, token: (.90, .80, ".001")
+        self.assertEqual(lr._market_quote(None, "td", "cond"), (.70, .30, "0.01"))
+        books.cached_value = None
+        self.assertEqual(lr._market_quote(None, "td", "cond"), (.90, .80, ".001"))
+        self.assertEqual(books.subscribed, [("td", "cond"), ("td", "cond")])
+
+    def test_market_quote_observe_uses_http_and_logs(self):
+        books = self._Books(("td", .60, .40))
+        old = (lr.MARKET_DATA, lr.MARKET_BOOKS, lr.book)
+        self.addCleanup(lambda: setattr(lr, "MARKET_DATA", old[0]))
+        self.addCleanup(lambda: setattr(lr, "MARKET_BOOKS", old[1]))
+        self.addCleanup(lambda: setattr(lr, "book", old[2]))
+        lr.MARKET_DATA, lr.MARKET_BOOKS = "observe", books
+        lr.book = lambda client, token: (.70, .30, ".01")
+        self.assertEqual(lr._market_quote(None, "td", "cond"), (.70, .30, ".01"))
+        row = [r for r in self.logs if r.get("ev") == "market_observe"][0]
+        self.assertEqual(row["ws"], [.60, .40])
+        self.assertEqual(row["http"], [.70, .30])
 
     # ---- one line per game: wallet vs what the trader thinks it holds ----
     def test_reconcile_summary_reports_leftover_shares(self):

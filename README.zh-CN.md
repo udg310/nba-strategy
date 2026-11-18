@@ -67,6 +67,8 @@ if ($games.Count) {
 
 ### 实盘接入与切换
 
+个人账户、盘口 WebSocket、比分观测和 Telegram 告警的逐步设置见[个人接入指南](reports/personal-live-setup.zh-CN.md)。
+
 Python 执行器负责发单权、持仓、订单状态与恢复。签名和 HTTP 传输调用项目所用的 Polymarket Python SDK，读取 Polygon CTF V2 合约回执来核对成交。本仓库的验证使用模拟交易所、合成回执与离线签名向量。真实账户接入需先核对市场版本、钱包签名模式、可用余额与订单查询结果。
 
 发送前，执行器先将已签名的订单号存入 SQLite。若请求进入网络传输后断线或停机，订单可能已经成交。重启后，执行器会保留对应的资金或份额，用原订单号核查结果。
@@ -144,6 +146,7 @@ D 通道一直持有到结算时，单笔平均收益率为 +6.5%，全损率为
 | `scripts/strategy.py` | A/C/D 策略的统一实现，用于回测和实盘行情回放 |
 | `scripts/nba_data.py` | 读取数据、处理比赛时钟和 HTTP 请求、加载压缩数据包 |
 | `scripts/live_runner.py` | 旧版 Python 实盘执行，每场比赛运行一个 `GameTrader` |
+| `scripts/market_ws.py` | Polymarket 盘口 WebSocket，带单 token 的 HTTP 回退；供 `live_runner.py --market-data observe|ws` 使用 |
 | `scripts/pm_creds.py` | 交易凭证辅助工具 |
 | `scripts/run_live.sh` | 启动旧版执行脚本并检查代理，`--live` 启用真实下单 |
 | `scripts/make_bundle.py` | 重新生成 `data/backtest_bundle.json.gz` |
@@ -169,7 +172,7 @@ python3 -I scripts/replay_live.py              # 回放 14 + 9 场实盘行情
 
 ## 旧版 Python 实盘脚本
 
-运行 `./scripts/run_live.sh` 可试运行，运行 `./scripts/run_live.sh --live` 会提交真实订单。回归测试命令为 `~/.polymarket/venv/bin/python -m unittest discover -s scripts -p 'test_live_runner.py'`。
+运行 `./scripts/run_live.sh` 可试运行，运行 `./scripts/run_live.sh --live` 会提交真实订单。盘口来源用 `--market-data http|observe|ws` 或 `MARKET_DATA` 选择，默认 `http`；`observe` 只用 HTTP 交易并记录推送差异，`ws` 在推送新鲜时使用推送的买一/卖一，缺失、单边或超过 3 秒时回退 HTTP，发单前仍用 HTTP 复核。回归测试命令为 `~/.polymarket/venv/bin/python -m unittest discover -s scripts -p 'test_live_runner.py'`。
 
 ### 如何并行处理比赛
 

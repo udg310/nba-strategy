@@ -10,6 +10,7 @@ or [Chinese](../README.zh-CN.md) guide for recordings, account setup and the loc
 | **`nba_data.py`** | data / clock / HTTP / compact bundle. **No strategy rules.** |
 | `executor.py` | alternative single-process strategy + SQLite executor (paper/live) from the collaborator branch. |
 | `live_runner.py` | **live execution**: one `GameTrader` per game + SQLite attempt ledger (one in-flight order per signal). |
+| `market_ws.py` | Polymarket order-book WebSocket with per-token HTTP fallback; used by `live_runner.py --market-data observe|ws`. |
 | `pm_creds.py` | credential helper; credentials stay in `~/.polymarket`. |
 | `run_live.sh` | launcher for the live runner (`--live` for real orders). |
 | `make_bundle.py` | rebuild `data/backtest_bundle.json.gz` from raw sources. |

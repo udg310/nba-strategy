@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import strategy as S
 import nba_data as nd
+from market_ws import MarketBooks
+from relay_observer import RelayObserver
 
 MICRO = 1_000_000
 VERSION = "acd-2026-11-14"
@@ -405,7 +407,7 @@ def public_quote(token):
     )
 
 
-def run_scoreboard(api, base, interval):
+def run_scoreboard(api, base, interval, books=None, relay=None):
     # These functions read public ESPN and Polymarket endpoints. This process
     # never constructs a legacy GameTrader or imports account credentials.
     from live_runner import scoreboard, resolve, outcome_abbr
@@ -415,7 +417,10 @@ def run_scoreboard(api, base, interval):
     while True:
         for snap in scoreboard():
             game = str(snap["gid"])
+            score_seen = time.monotonic()
             final = snap["state"] == "post"
+            if relay is not None and snap["state"] == "in":
+                relay.subscribe(game)
             if final and game in finished:
                 continue
             if game not in tracked:
@@ -439,11 +444,17 @@ def run_scoreboard(api, base, interval):
                 if not home:
                     continue
                 condition, _ = public_quote(by_side["fav"])
+                if books is not None:
+                    for token in by_side.values():
+                        books.subscribe(token, condition)
+                    books.start()
                 tracked[game] = (
                     GameSignals(game, condition, market["pre"], api, base),
                     by_side,
                     home == market["fav"],
                 )
+                if relay is not None:
+                    relay.register_market(game, by_side, books)
             producer, tokens, home_fav = tracked[game]
             elapsed = nd.elapsed_of(snap["period"], snap["detail"])
             if elapsed is None:
@@ -453,13 +464,16 @@ def run_scoreboard(api, base, interval):
             quotes = {}
             for side, token in tokens.items():
                 try:
-                    market, levels = public_quote(token)
+                    market, levels = (books.quote(token, producer.market) if books is not None
+                                      else public_quote(token))
                 except (URLError, TimeoutError):
                     continue
                 if market != producer.market:
                     raise ValueError("token no longer matches the resolved condition")
                 quotes[side] = levels
             home, away = snap["home_score"], snap["away_score"]
+            if relay is not None:
+                relay.observe_http(snap, quotes, score_seen)
             wall = time.time()
             producer.tick(
                 elapsed,
@@ -487,18 +501,31 @@ def run_scoreboard(api, base, interval):
         time.sleep(interval)
 
 
-def follow_scoreboard(api, base=None, interval=3):
-    while True:
-        try:
-            run_scoreboard(api, base, interval)
-        except (TimeoutError, URLError) as exc:
-            if isinstance(exc, HTTPError) and exc.code in (400, 401, 403):
-                raise
-            print(
-                f"Input interrupted ({type(exc).__name__}), restoring from executor",
-                file=sys.stderr,
-            )
-            time.sleep(interval)
+def follow_scoreboard(api, base=None, interval=3, market_data="http", score_data="http"):
+    books = MarketBooks(market_data, http_quote=public_quote) if market_data != "http" else None
+    relay = None
+    if score_data == "observe":
+        origin = os.getenv("NBA_BRIGHTSPORTS_URL")
+        if not origin:
+            raise ValueError("set NBA_BRIGHTSPORTS_URL for score observation")
+        relay = RelayObserver(origin)
+    try:
+        while True:
+            try:
+                run_scoreboard(api, base, interval, books, relay)
+            except (TimeoutError, URLError) as exc:
+                if isinstance(exc, HTTPError) and exc.code in (400, 401, 403):
+                    raise
+                print(
+                    f"Input interrupted ({type(exc).__name__}), restoring from executor",
+                    file=sys.stderr,
+                )
+                time.sleep(interval)
+    finally:
+        if books:
+            books.stop()
+        if relay:
+            relay.stop()
 
 
 def main():
@@ -518,9 +545,13 @@ def main():
         "--base-usd", type=Decimal, help="Optional paper-only base stake in dollars"
     )
     p.add_argument("--interval", type=float, default=3)
+    p.add_argument("--market-data", choices=("http", "observe", "ws"), default="http")
+    p.add_argument("--score-data", choices=("http", "observe"), default="http")
     args = p.parse_args()
     if args.environment == "live" and (args.recording or args.base_usd is not None):
         p.error("recordings and --base-usd are paper-only")
+    if args.recording and (args.market_data != "http" or args.score_data != "http"):
+        p.error("market and score data modes require --scoreboard")
     if args.interval <= 0 or (args.base_usd is not None and args.base_usd <= 0):
         p.error("stake and interval must be positive")
     api = LocalExecutor(args.url, args.account, args.environment)
@@ -529,7 +560,7 @@ def main():
     if args.recording:
         run_recording(api, args.recording, args.game, base)
     else:
-        follow_scoreboard(api, base, args.interval)
+        follow_scoreboard(api, base, args.interval, args.market_data, args.score_data)
 
 
 if __name__ == "__main__":

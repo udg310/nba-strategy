@@ -3,8 +3,8 @@
 
 Reads ~/.polymarket/env (mode 600) with:
     POLY_PRIVATE_KEY=0x...          # EOA private key (never leaves this machine)
-    POLY_FUNDER=0x...               # proxy wallet address (from profile page)
-    POLY_SIGNATURE_TYPE=1|2         # 1 = email/Magic proxy, 2 = browser wallet Safe
+    POLY_FUNDER=0x...               # account wallet address (from profile page)
+    POLY_SIGNATURE_TYPE=3           # 3 = Deposit Wallet; legacy wallets may use 1 or 2
 
 Writes ~/.polymarket/creds.json (mode 600):
     {"api_key":..., "api_secret":..., "api_passphrase":..., "funder":..., "signature_type":...}
@@ -20,19 +20,21 @@ ENV_PATH = os.path.join(HOME, ".polymarket", "env")
 CREDS_PATH = os.path.join(HOME, ".polymarket", "creds.json")
 
 def load_env():
-    if not os.path.exists(ENV_PATH):
-        sys.exit(f"missing {ENV_PATH}")
     env = {}
-    for line in open(ENV_PATH):
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        env[k.strip()] = v.strip().strip('"').strip("'")
+    if os.path.exists(ENV_PATH):
+        with open(ENV_PATH, encoding="utf-8") as source:
+            for line in source:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    env.update({k: os.environ[k] for k in ("POLY_PRIVATE_KEY", "POLY_FUNDER",
+                                           "POLY_SIGNATURE_TYPE") if k in os.environ})
     for k in ("POLY_PRIVATE_KEY", "POLY_FUNDER"):
         if not env.get(k):
-            sys.exit(f"{ENV_PATH}: {k} missing")
-    env.setdefault("POLY_SIGNATURE_TYPE", "2")
+            sys.exit(f"set {k} in environment or {ENV_PATH}")
+    env.setdefault("POLY_SIGNATURE_TYPE", "3")
     return env
 
 def main():
@@ -47,9 +49,9 @@ def main():
 
     env = load_env()
     try:
-        from py_clob_client.client import ClobClient
+        from py_clob_client_v2.client import ClobClient
     except ImportError:
-        sys.exit("pip install py-clob-client first")
+        sys.exit("install scripts/requirements-executor-live.txt first")
 
     funder = env["POLY_FUNDER"]
     sig = int(env["POLY_SIGNATURE_TYPE"])
@@ -60,7 +62,7 @@ def main():
         signature_type=sig,
         funder=funder,
     )
-    creds = client.create_or_derive_api_creds()
+    creds = client.create_or_derive_api_key()
     out = {
         "api_key": creds.api_key,
         "api_secret": creds.api_secret,

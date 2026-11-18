@@ -56,103 +56,22 @@ MIN_ORDER = 1.0
 # throttled; the cash reserve and the stake sizing still bound total exposure.
 MAX_OPEN = int(os.environ.get("MAX_OPEN", "999"))
 CASH_RESERVE = 0.20
+# http = unchanged; observe = use HTTP and log WS differences; ws = use a
+# fresh WS top-of-book and fall back to HTTP on gaps/staleness.
+MARKET_DATA = os.environ.get("MARKET_DATA", "http")
+MARKET_BOOKS = None
+MARKET_WS_WARNED = False
 
-# Lock channel: buy the favourite once it leads by >= LOCK_MARGIN (any time),
-# hold to settlement.  Separate pool and slot cap so it never crowds A/C/D.
-LOCK_FRAC = float(os.environ.get("LOCK_FRAC", "0.10"))
-MAX_OPEN_LOCK = int(os.environ.get("MAX_OPEN_LOCK", "999"))
 # Read-only team board, started alongside the runner (best effort).
 BOARD_HOST = os.environ.get("BOARD_HOST", "0.0.0.0")
 BOARD_PORT = int(os.environ.get("BOARD_PORT", "8790"))
 BOARD_ENABLED = os.environ.get("BOARD_ENABLED", "1") == "1"
 BOARD_AUTH = os.environ.get("BOARD_AUTH", "")     # "user:pass"; required for a public host
-LOCK_MARGIN = 12.0
-LOCK_ENABLED = os.environ.get("LOCK_ENABLED", "0") == "1"
-LOCK_CH = {"style": "settle", "side": "fav", "weight": 1.0, "tp": None,
-           "price_min": 0.0, "price_max": 0.985}
-
-# Dog lock: buy the DOG once it leads by >= DOGLOCK_MARGIN, hold to settlement.
-# Backtest (n=349, 2025-26 + 2026-27): +10.3%/trade, 31.5% full loss, longest
-# losing run 4 -- but only after a price floor: whatever is cheap at 12+ is
-# often cheap for a reason (p<0.45 -> -17.5% in the wide sample), and a Q1
-# trigger overlaps A/C and is the worst bucket (-0.9%).  Confirmations
-# ("still leading 5 min later") cut the full-loss rate to 22% but the price
-# has already run by then, so the return collapses to ~+4%: no free lunch.
-DOGLOCK_ENABLED = os.environ.get("DOGLOCK_ENABLED", "0") == "1"
-DOGLOCK_FRAC = float(os.environ.get("DOGLOCK_FRAC", "0.05"))
-MAX_OPEN_DOGLOCK = int(os.environ.get("MAX_OPEN_DOGLOCK", "999"))
-DOGLOCK_MARGIN = float(os.environ.get("DOGLOCK_MARGIN", "12"))
-DOGLOCK_MIN_EL = float(os.environ.get("DOGLOCK_MIN_EL", "720"))   # Q2 onwards
-DOGLOCK_PRICE_MIN = float(os.environ.get("DOGLOCK_PRICE_MIN", "0.45"))
-DOGLOCK_PRICE_MAX = float(os.environ.get("DOGLOCK_PRICE_MAX", "0.985"))
-# Optional margin stop: exit once the dog's lead falls below this many points.
-# Negative = off (hold to settlement), which is what the backtest prefers:
-# on 349 trades a +5 stop scores +13.6% vs +9.8% for settlement only while
-# exits fill at the printed price, but it goes to +9.4% once the exit pays
-# 4c of realistic slippage -- and a take-profit at any level is strictly
-# worse (-$60 to -$113 on the same games), because DL's edge IS settlement.
-# The stop still cuts portfolio drawdown by ~13%, so it buys a smoother
-# curve with the EV, not a better one.
-DOGLOCK_STOP_LEAD = float(os.environ.get("DOGLOCK_STOP_LEAD", "-1"))
-# How long after the crossing a DL entry is still allowed, in wall seconds.
-# Without it a runner that starts mid-game (or a book that is momentarily
-# blank) would buy a dog that led by 12 ten minutes ago at a totally
-# different price, which is not the trade the backtest measured.
-DOGLOCK_CHASE = float(os.environ.get("DOGLOCK_CHASE", "180"))
-DOGLOCK_CH = {"style": "settle", "side": "dog", "weight": 1.0, "tp": None,
-              "price_min": DOGLOCK_PRICE_MIN, "price_max": DOGLOCK_PRICE_MAX,
-              "stop_margin_hi": (-DOGLOCK_STOP_LEAD if DOGLOCK_STOP_LEAD >= 0
-                                 else None)}
 
 
-def lock_signal(evs):
-    """Lock: the first moment the favourite leads by >= LOCK_MARGIN."""
-    for el, m, w in evs:
-        if m >= LOCK_MARGIN:
-            return {"el": el, "margin": m, "wall": w}
-    return None
-
-
-def doglock_signal(evs):
-    """Dog lock: the first moment the DOG leads by >= DOGLOCK_MARGIN, at or
-    after DOGLOCK_MIN_EL.  A Q1 trigger is skipped on purpose: it is the same
-    move A/C fires on, and it is the only bucket with a negative return."""
-    for el, m, w in evs:
-        if el >= DOGLOCK_MIN_EL and m <= -DOGLOCK_MARGIN:
-            return {"el": el, "margin": m, "wall": w}
-    return None
-
-
-def channel_spec(ch):
-    """Spec for a channel; 'L' and 'DL' live here, not in strategy.CHANNELS."""
-    if ch == "L":
-        return LOCK_CH
-    if ch == "DL":
-        return DOGLOCK_CH
-    return S.CHANNELS[ch]
-
-
-def _slot_pool(ch):
-    """'L' and 'DL' each keep their own slot pool (and their own cap)."""
-    if ch == "L":
-        return "L", MAX_OPEN_LOCK
-    if ch == "DL":
-        return "DL", MAX_OPEN_DOGLOCK
-    return None, MAX_OPEN
-
-
-def _pool_full(channel, durable_keys):
-    pool, cap = _slot_pool(channel)
+def _pool_full(durable_keys):
     occupied = durable_keys | {(p["gid"], p["ch"]) for p in ALL_POSITIONS}
-    return sum(_slot_pool(ch)[0] == pool for _, ch in occupied) >= cap
-
-
-def _frac_of(ch):
-    if ch == "L":
-        return LOCK_FRAC
-    if ch == "DL":
-        return DOGLOCK_FRAC
-    return STAKE_FRAC * S.CHANNELS[ch]["weight"]
+    return len(occupied) >= MAX_OPEN
 
 
 # ---- ownership -------------------------------------------------------------
@@ -279,6 +198,44 @@ def book(client, token):
     bids = [float(x["price"]) for x in (b.get("bids") or [])]
     return (min(asks) if asks else None), (max(bids) if bids else None), \
            (b.get("tick_size") or "0.01")
+
+
+def _market_quote(client, token, condition):
+    """Best ask/bid for a signal check; never raises.
+
+    In ws mode a fresh streamed top-of-book is used first, falling back to
+    HTTP when the book is missing, one-sided or stale.  In observe mode the
+    HTTP result is authoritative and the stream is only compared/logged.
+    Order submission still uses book() directly, so price, tick and limit are
+    re-read from the venue before signing.
+    """
+    global MARKET_BOOKS, MARKET_WS_WARNED
+    books = MARKET_BOOKS
+    cached = None
+    if books is not None:
+        try:
+            books.subscribe(token, condition)
+            if books.start():
+                log({"ev": "market_ws_start", "mode": MARKET_DATA})
+            cached = books.cached(token)
+        except Exception as exc:
+            cached = None
+            if books is MARKET_BOOKS and isinstance(exc, RuntimeError):
+                MARKET_BOOKS = None
+            if not MARKET_WS_WARNED:
+                MARKET_WS_WARNED = True
+                log({"ev": "market_ws_error", "mode": MARKET_DATA,
+                     "err": str(exc)[:160]})
+    if MARKET_DATA == "ws" and cached is not None:
+        _, ask, bid = cached
+        if ask is not None and bid is not None:
+            return ask, bid, "0.01"
+    ask, bid, tick = book(client, token)
+    if MARKET_DATA == "observe" and cached is not None:
+        if (cached[1], cached[2]) != (ask, bid):
+            log({"ev": "market_observe", "token": token,
+                 "ws": [cached[1], cached[2]], "http": [ask, bid]})
+    return ask, bid, tick
 
 
 def _check_buy_deadline(deadline):
@@ -571,10 +528,15 @@ class GameTrader(threading.Thread):
         active_parents = {r["channel"] for r in rows if r["action"] == "OPEN"
                           and r["state"] in (SUBMITTING, ACCEPTED, UNKNOWN, FILLED)}
         for key, close in closes.items():
+            if key not in S.CHANNELS:
+                log({"ev": "unsupported_channel", "gid": self.gid, "ch": key,
+                     "note": "ignored; only A/C/D are supported"})
+                continue
             if key in active_parents or close["state"] not in (SUBMITTING, ACCEPTED, UNKNOWN):
                 continue
             # A legacy sale with no active parent has no proven remaining allocation.
-            outcome = close["outcome"] or (self.res["fav"] if channel_spec(key)["side"] == "fav"
+            spec = S.CHANNELS[key]
+            outcome = close["outcome"] or (self.res["fav"] if spec["side"] == "fav"
                       else next(o for o in self.res["outcomes"] if o != self.res["fav"]))
             token = self.res["tokens"][self.res["outcomes"].index(outcome)]
             LEDGER.handoff(self.gid, key, action="CLOSE", order_id=close["order_id"],
@@ -585,10 +547,14 @@ class GameTrader(threading.Thread):
             if row["action"] != "OPEN":
                 continue
             key = row["channel"]
+            if key not in S.CHANNELS:
+                log({"ev": "unsupported_channel", "gid": self.gid, "ch": key,
+                     "note": "ignored; only A/C/D are supported"})
+                continue
             self.done.add(key)
             if row["state"] not in (SUBMITTING, ACCEPTED, UNKNOWN, FILLED):
                 continue
-            spec = channel_spec(key)
+            spec = S.CHANNELS[key]
             outcome = row["outcome"] or (self.res["fav"] if spec["side"] == "fav"
                       else next(o for o in self.res["outcomes"] if o != self.res["fav"]))
             token = self.res["tokens"][self.res["outcomes"].index(outcome)]
@@ -728,35 +694,27 @@ class GameTrader(threading.Thread):
             return
         evs = self._events(g, now)
         pre = self.res.get("pre")
-        for key in ("A", "C", "D", "L", "DL"):
+        for key in ("A", "C", "D"):
             if key in self.done or key in self.pending:
                 continue
-            if key == "L":
-                if not LOCK_ENABLED:
-                    continue
-                ch = LOCK_CH
-                sig = lock_signal(evs)
-            elif key == "DL":
-                if not DOGLOCK_ENABLED:
-                    continue
-                ch = DOGLOCK_CH
-                sig = doglock_signal(evs)
-                if sig is not None and now - sig["wall"] > DOGLOCK_CHASE:
-                    # the crossing is stale (runner started mid-game): the
-                    # price no longer reflects the moment the backtest bought
-                    sig = None
-            else:
-                ch = S.CHANNELS[key]
-                sig = (S.process_signal(evs, pre, ch) if ch["style"] == "process"
-                       else S.settle_signal(evs, pre, ch))
+            ch = S.CHANNELS[key]
+            sig = (S.process_signal(evs, pre, ch) if ch["style"] == "process"
+                   else S.settle_signal(evs, pre, ch))
             if sig is None:
+                continue
+            if sig.get("wall") is not None and now - sig["wall"] > BUY_WINDOW:
+                # The signal was seen before the entry window; do not chase it
+                # minutes later after a missing ask or a failed attempt.
+                self.done.add(key)
+                log({"ev": "signal_stale", "gid": self.gid, "ch": key,
+                     "age": round(now - sig["wall"], 1), "el": sig["el"]})
                 continue
             side_out = self.res["fav"] if ch["side"] == "fav" else \
                 next((o for o in self.res["outcomes"] if o != self.res["fav"]), None)
             if side_out is None:
                 continue
             tok = self.res["tokens"][self.res["outcomes"].index(side_out)]
-            ask, _, _ = book(self.client, tok)
+            ask, _, _ = _market_quote(self.client, tok, self.res.get("market", ""))
             if ask is None:
                 log({"ev": "no_ask", "gid": self.gid, "ch": key})
                 continue
@@ -765,22 +723,17 @@ class GameTrader(threading.Thread):
             ok = ((eff >= S.PRICE_FLOOR) if ch["style"] == "process"
                   else ch["price_min"] <= eff <= ch["price_max"])
             if not ok:
-                if key == "DL":
-                    # the band is checked at the crossing moment; a miss there
-                    # means the game is skipped, not re-priced later (the same
-                    # convention D uses in the backtest)
-                    self.done.add("DL")
+                if key == "D":
+                    # D takes the first qualifying state; a miss at that
+                    # moment ends the game rather than re-pricing it later.
+                    self.done.add(key)
                 log({"ev": "signal_skip_band", "gid": self.gid, "ch": key,
                      "ask": ask, "el": sig["el"], "m": sig["margin"]})
                 continue
             with LOCK:
                 occupied, _, _, _ = LEDGER.exposure()
-                full = _pool_full(key, occupied)
+                full = _pool_full(occupied)
             if full:
-                if _slot_pool(key)[0] is not None:
-                    # one lock per game: when the slots are full, skip this
-                    # game rather than buy later at a higher (worse) price.
-                    self.done.add(key)
                 log({"ev": "signal_skip_cap", "gid": self.gid, "ch": key})
                 continue
             bal = balance(self.client)
@@ -793,7 +746,7 @@ class GameTrader(threading.Thread):
             with LOCK:
                 deployed = sum(p["size"] * p["entry"] for p in ALL_POSITIONS)
             equity = bal + deployed
-            usd = min(equity * _frac_of(key), bal * (1 - CASH_RESERVE))
+            usd = min(equity * STAKE_FRAC * ch["weight"], bal * (1 - CASH_RESERVE))
             if usd < MIN_ORDER:
                 log({"ev": "signal_skip_cash", "gid": self.gid, "ch": key,
                      "usd": round(usd, 2), "balance": round(bal, 2)})
@@ -912,6 +865,7 @@ class GameTrader(threading.Thread):
             if now > q["deadline"]:
                 self.inflight.pop(key)
                 self.pending.discard(key)
+                self.done.add(key)
                 log(dict(ev="buy_gave_up", gid=self.gid, ch=key, posted=False))
                 continue
 
@@ -945,6 +899,15 @@ class GameTrader(threading.Thread):
         ask, _, tick = book(self.client, q["token"])
         if ask is None:
             return "rejected", {"err": "no_ask"}
+        # The signal saw a possibly streamed ask; recheck the strategy band
+        # against the HTTP ask that is about to be signed.
+        ch = S.CHANNELS[q["ch"]]
+        effective = ask + S.entry_cost(ask)
+        if ch["style"] == "process":
+            if effective < S.PRICE_FLOOR:
+                return "rejected", {"err": f"effective {effective:.3f} below price floor"}
+        elif not ch["price_min"] <= effective <= ch["price_max"]:
+            return "rejected", {"err": f"effective {effective:.3f} outside price band"}
         best = Decimal(str(ask))
         step = max(Decimal(str(tick or "0.01")), Decimal("0.01"))
         cap = min(Decimal(str(q["limit"])), best + Decimal(str(MAX_SLIP)), 1 - step)
@@ -963,7 +926,7 @@ class GameTrader(threading.Thread):
                 keys, reserved, unknown, _basis = LEDGER.exposure()
                 if (self.gid, q["ch"]) in keys:
                     raise DuplicateAttempt
-                if _pool_full(q["ch"], keys):
+                if _pool_full(keys):
                     raise ValueError("open cap")
                 available = max(0., cash - reserved) * (1 - CASH_RESERVE)
                 if unknown or q["usd"] > available:
@@ -1031,16 +994,18 @@ class GameTrader(threading.Thread):
         elapsed = nd.elapsed_of(g["period"], g["detail"])
         for p in list(self.positions):
             key = p["ch"]
-            spec = channel_spec(key)
+            spec = S.CHANNELS[key]
             reason = p.get("exit_reason") or LEDGER.exit_intent(self.gid, key)
-            if not reason and p["style"] == "process":
+            if p["style"] == "process":
+                # Force/time always outrank a stored target, so a target that
+                # no longer clears the bid cannot strand the position.
                 if final or (elapsed is not None and elapsed >= S.FORCE_EL):
                     reason = "force"
                 elif (spec.get("game_hold") and elapsed is not None and p.get("el_in") is not None
                       and elapsed - p["el_in"] >= spec["game_hold"]):
                     reason = "time"
-                else:
-                    _, bid, _ = book(self.client, p["token"])
+                elif not reason:
+                    _, bid, _ = _market_quote(self.client, p["token"], self.res.get("market", ""))
                     if bid is not None and bid - S.exit_cost(bid) >= p["entry"] + p["tp"]:
                         reason = "target"
             elif not reason and not final and self.hist:
@@ -1072,7 +1037,7 @@ class GameTrader(threading.Thread):
         row = next((r for r in LEDGER.rows(self.gid) if r["action"] == "CLOSE"
                     and r["channel"] == key and r["state"] in (SUBMITTING, ACCEPTED, UNKNOWN)), None)
         if row is None:
-            status, info = self._post_sell(p)
+            status, info = self._post_sell(p, finished=finished)
             if status not in ("posted", "unknown"):
                 return
             row = next((r for r in LEDGER.rows(self.gid)
@@ -1097,7 +1062,7 @@ class GameTrader(threading.Thread):
         if p["size"] <= 1e-9:
             self._drop(p)
 
-    def _post_sell(self, p):
+    def _post_sell(self, p, finished=False):
         if not self.live:
             return "rejected", {"err": "dry run"}
         if LEDGER is None:
@@ -1130,6 +1095,14 @@ class GameTrader(threading.Thread):
         _, bid, tick = book(self.client, p["token"])
         if bid is None:
             return "rejected", {"err": "no_bid"}
+        # A streamed quote may have triggered target up to max_age ago.  Recheck
+        # the target against the HTTP bid that will actually be used, unless a
+        # force/time exit (finished) has taken over.
+        if p.get("exit_reason") == "target" and not finished:
+            if p.get("tp") is None or bid - S.exit_cost(bid) < p["entry"] + p["tp"]:
+                log({"ev": "target_not_met", "gid": self.gid, "ch": p["ch"],
+                     "bid": bid, "entry": p["entry"], "tp": p.get("tp")})
+                return "rejected", {"err": "target no longer met", "bid": bid}
         tick = str(tick or "0.01")
         limit = max(_round_down_tick(bid, tick), _price_step(tick))
         prepared = {}
@@ -1264,10 +1237,15 @@ def resume_plan():
 
 # ------------------------------------------------------------------ main
 def main():
+    global MARKET_DATA
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--market-data", choices=("http", "observe", "ws"),
+                    default=MARKET_DATA,
+                    help="order-book source: HTTP, observe WS vs HTTP, or use WS top-of-book")
     args = ap.parse_args()
+    MARKET_DATA = args.market_data
     live = args.live and not args.dry_run
     if live:
         with account_lock(load_env()["POLY_FUNDER"]):
@@ -1327,6 +1305,7 @@ def run(live):
 
 
 def _run(live):
+    global OUTDIR, MARKET_BOOKS, MARKET_WS_WARNED
     client = make_client() if live else make_public_client()
     bal = balance(client) if live else None
     try:
@@ -1337,12 +1316,7 @@ def _run(live):
     log({"ev": "start", "live": live, "git_sha": revision, "balance": bal, "stake_frac": STAKE_FRAC,
          "stake_now": {k: round((bal or 0) * STAKE_FRAC * w, 2)
                        for k, w in (("A", 1.0), ("C", 1.0), ("D", 2.0))},
-         "max_open": MAX_OPEN, "outdir": OUTDIR,
-         "lock": {"on": LOCK_ENABLED, "frac": LOCK_FRAC, "margin": LOCK_MARGIN},
-         "doglock": {"on": DOGLOCK_ENABLED, "frac": DOGLOCK_FRAC,
-                     "margin": DOGLOCK_MARGIN, "min_el": DOGLOCK_MIN_EL,
-                     "price": [DOGLOCK_PRICE_MIN, DOGLOCK_PRICE_MAX],
-                     "stop_lead": DOGLOCK_STOP_LEAD}})
+         "max_open": MAX_OPEN, "outdir": OUTDIR, "market_data": MARKET_DATA})
     filled, done = resume_plan() if live else ({}, set())
     rows = LEDGER.rows() if live and LEDGER is not None else []
     active = [r for r in rows if r["state"] in (SUBMITTING, ACCEPTED, UNKNOWN)
@@ -1357,6 +1331,15 @@ def _run(live):
         return
     if live:
         start_board()
+    MARKET_WS_WARNED = False
+    if MARKET_DATA != "http":
+        try:
+            from market_ws import MarketBooks
+            MARKET_BOOKS = MarketBooks(MARKET_DATA)
+            log({"ev": "market_ws_ready", "mode": MARKET_DATA})
+        except Exception as exc:
+            MARKET_BOOKS = None
+            log({"ev": "market_ws_error", "mode": MARKET_DATA, "err": str(exc)[:160]})
     traders = {}
     with ThreadPoolExecutor(max_workers=3, thread_name_prefix="recovery") as pool:
         try:
@@ -1366,6 +1349,12 @@ def _run(live):
                 t.stop()
             for t in traders.values():
                 t.join()
+            if MARKET_BOOKS is not None:
+                try:
+                    MARKET_BOOKS.stop()
+                finally:
+                    MARKET_BOOKS = None
+                log({"ev": "market_ws_stop"})
     log({"ev": "stopped", "open": len(ALL_POSITIONS), "balance": balance(client) if live else None,
          "traders": len(traders), "confirmed_buy": CONFIRMED["buy"],
          "confirmed_sell": CONFIRMED["sell"]})
@@ -1477,10 +1466,12 @@ def _poll_games(live, client, traders, pool, recovery, filled, done, pending):
                 if res and not res.get("fav") and gid in recovery and live:
                     favorites = set()
                     for r in LEDGER.open_rows(gid):
-                        if (r["identity_verified"] and r["market"] and r["market"] == res.get("market")
+                        spec = S.CHANNELS.get(r["channel"])
+                        if (spec and r["identity_verified"] and r["market"]
+                                and r["market"] == res.get("market")
                                 and r["token"] in res["tokens"]):
                             i = res["tokens"].index(r["token"])
-                            favorites.add(res["outcomes"][i if channel_spec(r["channel"])["side"] == "fav" else 1-i])
+                            favorites.add(res["outcomes"][i if spec["side"] == "fav" else 1-i])
                     if len(favorites) == 1:
                         res = dict(res, fav=favorites.pop())
                 if res and res.get("fav"):

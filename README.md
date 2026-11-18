@@ -19,6 +19,13 @@ export HTTPS_PROXY=http://127.0.0.1:9567   # CLOB SDK; direct endpoint is blocke
 ./scripts/run_live.sh --live
 ```
 
+The order-book source is selected with `--market-data http|observe|ws` (or
+`MARKET_DATA`); the default is `http`. `observe` keeps HTTP for trading and
+logs stream/HTTP differences. `ws` uses a fresh streamed top-of-book and falls
+back to HTTP when the book is missing, one-sided or older than 3 seconds.
+Order submission still re-reads the venue over HTTP. Install
+`scripts/requirements-executor-live.txt` for `websocket-client`.
+
 The `scripts/executor.py` path above is a separate, alternative single-process
 implementation.
 

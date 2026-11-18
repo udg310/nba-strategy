@@ -20,6 +20,7 @@ from executor_lock import account_lock
 from executor_producer import follow_scoreboard, run_recording
 from executor_reports import Reports
 from executor_venues import LiveVenue, PaperVenue
+from telegram_alerts import TelegramAlerts
 
 
 def loopback(value):
@@ -46,11 +47,17 @@ def options():
     parser.add_argument("--listen", "-listen", type=loopback, default="127.0.0.1:8787")
     parser.add_argument("--capital", "-capital", type=int, default=100_000_000, help="initial cash in millionths")
     parser.add_argument("--max-open", "-max-open", type=int, default=5)
+    parser.add_argument("--market-data", choices=("http", "observe", "ws"), default="http")
+    parser.add_argument("--score-data", choices=("http", "observe"), default="http")
     args = parser.parse_args()
     if args.recording and args.mode != "paper":
         parser.error("--recording requires paper mode")
     if args.init_live and args.mode != "live":
         parser.error("--init-live requires live mode")
+    if args.market_data != "http" and not args.scoreboard:
+        parser.error("--market-data requires --scoreboard")
+    if args.score_data != "http" and not args.scoreboard:
+        parser.error("--score-data requires --scoreboard")
     if args.mode == "live":
         args.account = args.account.lower()
         if (not args.db or not args.account or args.account == "local"
@@ -105,22 +112,30 @@ def run(args):
             except Exception as exc:
                 logging.warning("startup reconciliation pending: %s", exc)
             api = ExecutorAPI(ledger, reports, engine)
+            alerts = None
+            if os.getenv("NBA_TELEGRAM_BOT_TOKEN") or os.getenv("NBA_TELEGRAM_CHAT_ID"):
+                alerts = TelegramAlerts(ledger, reports)
             with serve(api, args.listen, token) as addr:
                 try:
                     engine.start()
+                    if alerts:
+                        alerts.start()
                     logging.info("executor ready on %s:%s mode=%s", addr[0], addr[1], args.mode)
                     if args.scoreboard or args.recording:
                         logging.info("strategy started")
                     if args.recording:
                         run_recording(api, args.recording, None, None)
                     elif args.scoreboard:
-                        follow_scoreboard(api)
+                        follow_scoreboard(api, market_data=args.market_data,
+                                          score_data=args.score_data)
                     else:
                         # Periodic wakeups also deliver console signals on Windows.
                         idle = threading.Event()
                         while not idle.wait(0.5):
                             pass
                 finally:
+                    if alerts:
+                        alerts.stop()
                     engine.stop()
 
 

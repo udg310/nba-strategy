@@ -36,6 +36,8 @@ NBA_PROXY=
 HTTPS_PROXY=
 HTTP_PROXY=
 STAKE_FRAC=0.05
+# Order-book source: http, observe or ws
+MARKET_DATA=http
 # Optional Telegram alerts
 TG_TOKEN=
 TG_CHAT=

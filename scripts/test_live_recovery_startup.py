@@ -156,7 +156,9 @@ class RecoveryStartupTests(unittest.TestCase):
             self.open_order(ledger, "C", filled=True)
         changed = dict(MARKET, tokens=["other-fav", "other-dog"], market="other-market")
         with patch.object(lr, "resolve", return_value=changed):
-            self.boot([snapshot()], [snapshot(state="post", period=4, clock="Final")])
+            self.boot([snapshot()],
+                      [snapshot(state="post", period=4, clock="Final")],
+                      [snapshot(state="post", period=4, clock="Final")])
         with self.db() as ledger:
             task, = ledger.tasks()
             self.assertEqual((task["action"], task["size"], task["token"], task["market"]),
@@ -214,7 +216,7 @@ class RecoveryStartupTests(unittest.TestCase):
                            order_id="old-buy", reserved_usd=5, **ASSET)
         with patch.object(lr.time, "time", return_value=now), \
              patch.object(lr, "resume_plan", return_value=({}, {("old", "A")})):
-            self.boot([old_final], [current], [current_final])
+            self.boot([old_final], [old_final], [current], [current_final], [current_final])
         self.assertEqual(self.before_tick, [[], []])
         self.assertEqual(len([e for e in self.events if e["ev"] == "day_over"]), 1)
         self.assertEqual(self.posts, [])

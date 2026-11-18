@@ -80,6 +80,7 @@ def _pool_full(durable_keys):
 
 
 BUY_WINDOW = 15          # the price is flat for ~15s, then drifts 2-3c/min
+SNAPSHOT_QUEUE = 8       # keep intermediate scores while a trader is busy
 RECONCILE_GRACE = 5      # seconds to let the balance API catch up before reporting
 RECONCILE_DUST = 0.02    # shares; below this a token counts as back to zero
 MAX_SLIP = 0.03
@@ -446,22 +447,50 @@ def resolve(g, client):
 
 def scoreboard():
     d = nd.http_json("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard")
+    if not isinstance(d, dict) or not isinstance(d.get("events"), list):
+        return []
     out = []
-    for ev in d.get("events", []):
-        comp = (ev.get("competitions") or [{}])[0]
-        st = (comp.get("status") or {}).get("type", {})
-        teams = comp.get("competitors", [])
-        home = next((t for t in teams if t.get("homeAway") == "home"), None)
-        away = next((t for t in teams if t.get("homeAway") == "away"), None)
+    for ev in d["events"]:
+        if not isinstance(ev, dict) or ev.get("id") is None or not ev.get("date"):
+            continue
+        comps = ev.get("competitions")
+        if not isinstance(comps, list) or not comps or not isinstance(comps[0], dict):
+            continue
+        comp = comps[0]
+        status = comp.get("status") or {}
+        st = status.get("type") or {}
+        state = st.get("state")
+        if state not in ("pre", "in", "post"):
+            continue
+        try:
+            period = int(status.get("period"))
+        except (TypeError, ValueError):
+            continue
+        if period < 0:
+            continue
+        teams = comp.get("competitors")
+        if not isinstance(teams, list):
+            continue
+        home = next((t for t in teams if isinstance(t, dict)
+                     and t.get("homeAway") == "home"), None)
+        away = next((t for t in teams if isinstance(t, dict)
+                     and t.get("homeAway") == "away"), None)
         if not home or not away:
             continue
-        out.append({"gid": str(ev.get("id")), "state": st.get("state"),
-                    "detail": st.get("shortDetail", ""),
-                    "period": (comp.get("status") or {}).get("period", 0),
-                    "home": home["team"].get("abbreviation"),
-                    "away": away["team"].get("abbreviation"),
-                    "home_score": int(home.get("score") or 0),
-                    "away_score": int(away.get("score") or 0),
+        home_team, away_team = home.get("team") or {}, away.get("team") or {}
+        home_abbr, away_abbr = home_team.get("abbreviation"), away_team.get("abbreviation")
+        if not home_abbr or not away_abbr:
+            continue
+        try:
+            home_score = int(home.get("score"))
+            away_score = int(away.get("score"))
+        except (TypeError, ValueError):
+            continue
+        out.append({"gid": str(ev["id"]), "state": state,
+                    "detail": st.get("shortDetail") or "",
+                    "period": period,
+                    "home": home_abbr, "away": away_abbr,
+                    "home_score": home_score, "away_score": away_score,
                     "start": ev.get("date")})
     return out
 
@@ -488,8 +517,14 @@ def archived_final(gid):
 
 
 def outcome_abbr(res, game, abbr):
+    target = (abbr or "").upper()
     for o in res["outcomes"]:
-        if (nd.abbr_of_name(o) or "").upper() == (abbr or "").upper():
+        # Some feeds/outcomes use the abbreviation itself; accept that exact
+        # match before the nickname table.  Never guess a side when neither
+        # matches -- an inverted m_fav is worse than skipping the snapshot.
+        if str(o).upper() == target:
+            return o
+        if (nd.abbr_of_name(o) or "").upper() == target:
             return o
     return None
 
@@ -505,7 +540,7 @@ class GameTrader(threading.Thread):
         self.home = home
         self.live = live
         self.client = make_client() if live else make_public_client()
-        self.q = queue.Queue(maxsize=1)
+        self.q = queue.Queue(maxsize=SNAPSHOT_QUEUE)
         self.stop_evt = threading.Event()
         self.hist = []
         self.done = set()
@@ -602,7 +637,7 @@ class GameTrader(threading.Thread):
 
     def put(self, snap):
         try:
-            while not self.q.empty():
+            while self.q.full():
                 self.q.get_nowait()
             self.q.put_nowait(snap)
         except Exception:
@@ -675,7 +710,11 @@ class GameTrader(threading.Thread):
             return False
         home_out = outcome_abbr(self.res, g, self.home)
         fav = self.res.get("fav")
-        home_is_fav = (fav == home_out) if (fav and home_out) else True
+        if not fav or not home_out:
+            log({"ev": "orientation_missing", "gid": self.gid,
+                 "home": self.home, "fav": fav, "home_out": home_out})
+            return False
+        home_is_fav = fav == home_out
         m = (g["home_score"] - g["away_score"]) if home_is_fav else \
             (g["away_score"] - g["home_score"])
         self.hist.append((now, el, m, key))
@@ -1407,6 +1446,7 @@ def _poll_games(live, client, traders, pool, recovery, filled, done, pending):
     last_check = float("-inf")
     check = None
     archives, retry, archived, finished = {}, {}, {}, set()
+    post_count = {}
     saw_live = False
     tick = 0
     while True:
@@ -1459,9 +1499,16 @@ def _poll_games(live, client, traders, pool, recovery, filled, done, pending):
             if gid in finished:
                 continue
             final = g["state"] == "post"
+            if final:
+                post_count[gid] = post_count.get(gid, 0) + 1
+            else:
+                post_count[gid] = 0
+            # A single ESPN "post" can be a transient/corrected state. Require
+            # two consecutive polls, or an archived final from the game summary.
+            confirmed_final = final and (post_count[gid] >= 2 or gid in archived)
             saw_live |= g["state"] == "in"
             t = traders.get(gid)
-            if t is None and (g["state"] == "in" or (final and gid in recovery)):
+            if t is None and (g["state"] == "in" or (confirmed_final and gid in recovery)):
                 res = resolve(g, client)
                 if res and not res.get("fav") and gid in recovery and live:
                     favorites = set()
@@ -1480,7 +1527,7 @@ def _poll_games(live, client, traders, pool, recovery, filled, done, pending):
                     except (ValueError, KeyError) as exc:
                         log(dict(ev="recovery_market_error", gid=gid, err=str(exc)[:160]))
                 if t is None:
-                    if final and gid in recovery and live:
+                    if confirmed_final and gid in recovery and live:
                         _handoff_without_market(gid, filled)
                         recovery.discard(gid)
                         finished.add(gid)
@@ -1501,8 +1548,10 @@ def _poll_games(live, client, traders, pool, recovery, filled, done, pending):
                 traders[gid] = t
                 t.start()
             if t is not None:
+                if final and not confirmed_final:
+                    continue
                 t.put(g)
-                if final and t.flat():
+                if confirmed_final and t.flat():
                     t.log_reconcile()
                     t.stop()
                     t.join()

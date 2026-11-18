@@ -150,7 +150,7 @@ class SignedDispatchTests(unittest.TestCase):
 
     def test_live_cli_posts_one_signed_order_with_account_lock(self):
         g = dict(gid=self.gid, state="in", start="", period=2, detail="6:00",
-                 home="HOME", away="AWAY", home_score=54, away_score=51)
+                 home="Fav", away="Dog", home_score=54, away_score=51)
         timeout = time.monotonic() + 4
         def scoreboard():
             if time.monotonic() > timeout:

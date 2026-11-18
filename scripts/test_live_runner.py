@@ -520,6 +520,40 @@ class LiveRunnerFixes(unittest.TestCase):
         self.assertEqual(row["ws"], [.60, .40])
         self.assertEqual(row["http"], [.70, .30])
 
+    def test_snapshot_queue_keeps_intermediate_scores(self):
+        t = lr.GameTrader("gq", RES, "HOME", True)
+        t.put({"score": 1})
+        t.put({"score": 2})
+        self.assertEqual(t.q.qsize(), 2)
+        self.assertEqual(t.q.get_nowait(), {"score": 1})
+        self.assertEqual(t.q.get_nowait(), {"score": 2})
+
+    def test_scoreboard_skips_incomplete_espn_games(self):
+        valid = {
+            "id": "2", "date": "2026-11-17T00:00:00Z",
+            "competitions": [{
+                "status": {"period": 2, "type": {"state": "in", "shortDetail": "6:00"}},
+                "competitors": [
+                    {"homeAway": "home", "team": {"abbreviation": "BOS"}, "score": "50"},
+                    {"homeAway": "away", "team": {"abbreviation": "NYK"}, "score": "48"},
+                ],
+            }],
+        }
+        malformed = {
+            "id": "1", "date": "2026-11-17T00:00:00Z",
+            "competitions": [{
+                "status": {"period": 2, "type": {"state": "in"}},
+                "competitors": [
+                    {"homeAway": "home", "team": {"abbreviation": "BOS"}},
+                    {"homeAway": "away", "team": {"abbreviation": "NYK"}},
+                ],
+            }],
+        }
+        with patch.object(lr.nd, "http_json", return_value={"events": [malformed, valid]}):
+            rows = lr.scoreboard()
+        self.assertEqual([row["gid"] for row in rows], ["2"])
+        self.assertEqual((rows[0]["home_score"], rows[0]["away_score"]), (50, 48))
+
     # ---- one line per game: wallet vs what the trader thinks it holds ----
     def test_reconcile_summary_reports_leftover_shares(self):
         self.enterContext(patch.object(lr, "RECONCILE_GRACE", 0))

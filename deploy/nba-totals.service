@@ -1,0 +1,26 @@
+[Unit]
+Description=NBA totals fade runner (O/U overreaction experiment)
+After=network-online.target
+Wants=network-online.target
+OnFailure=nba-live-alert.service
+
+[Service]
+Type=simple
+User=nba
+Group=nba
+Environment=HOME=/home/nba
+EnvironmentFile=/etc/nba-live.env
+WorkingDirectory=/opt/nba-strategy
+ExecStart=/opt/nba-strategy/.venv/bin/python -I scripts/totals_runner.py --live
+Restart=on-failure
+RestartSec=20
+RuntimeMaxSec=14h
+KillSignal=SIGINT
+TimeoutStopSec=90
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=append:/var/log/nba-live/totals.log
+StandardError=append:/var/log/nba-live/totals.log
+
+[Install]
+WantedBy=multi-user.target

@@ -12,3 +12,6 @@ data/cache/
 data/_archive/
 scripts/_archive/
 data/live_trade/
+
+# totals fade runner logs (server-local)
+data/totals_live/

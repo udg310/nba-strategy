@@ -1,46 +1,52 @@
 # -*- coding: utf-8 -*-
-"""Totals fade runner — the O/U overreaction experiment.
+"""Q3-break totals runner — the "default line is too high" experiment.
 
-THE SIGNAL (discovered 2026-11-21 on 30 games; see reports/)
-  second half (game clock >= 20:00), the Over price of a liquid full-game
-  O/U line is in 0.20-0.60, and it has risen >= 15c in the last 5 minutes.
-  Buy the UNDER and hold to settlement.  One entry per line; the dog-side
-  A/C/D system is not used here.
+THE SIGNAL (found 2026-11-21; validated on 166 OOS games 2026-10-20..11-11)
+  At the end of Q3 (game clock 2040-2280s), for every full-game O/U line:
+    P(Over) = historical P(Q4 remaining points > line - current_total)
+  Take the line with the LOWEST P(Over).  If
+      P(Over) <= P_MAX  and  market Over mid >= P(Over) + GAP
+  buy the UNDER and hold to settlement.  One entry per game.
+  Symmetrically the Over side exists, but in the sample it is weaker
+  (87% win at 87% price); this runner only takes the Under side.
 
 WHY IT MAY EXIST
-  Polymarket totals are thin and anchored to the pregame line.  A scoring
-  run pulls retail money into the Over; the printed price and the top of
-  book overshoot.  The fade bets the run does not change the final total
-  as much as the price implies.
+  At the Q3 break the market's deep-OTM lines are anchored to the pregame
+  total and are not fully repriced.  Retail buys the cheap Over lottery
+  ticket; the Under of the safest line is left at 0.75-0.87 while the
+  historical Q4 distribution says 0.90-0.99.  The edge is the stale branch,
+  not a prediction of the final total.
 
-WHAT THIS RUNNER IS FOR
-  The backtest used last-trade prints; this runner measures whether the
-  edge survives the REAL book.  It logs, for every signal:
-    over_mid / over_bid / over_ask / under_ask / under ask depth
-  and the settlement.  The first live day is a measurement, not a profit
-  target.  --dry-run logs paper trades only.
+MEASURED SO FAR (prints, not executable asks)
+  166 OOS games: 36 entries, 91.7% Under win, avg price 83.1%, +10.5%/trade
+  50 combined:  94.0% win, +13.8%/trade, bootstrap [+4.5%, +21.3%]
+  3 losses were high-scoring Q4s (86-95 points).
+
+WHAT THIS RUNNER ADDS
+  It scans ALL full-game lines (not the pregame top-6), reads the real
+  Under ask + top-3 depth at the break, and logs exactly what was available.
+  The first live sessions are a measurement of the print->ask gap.
 
 SAFETY
-  - Max 3 concurrent positions, one per line.
-  - 3% of equity per trade, floored at the 5-share minimum, capped by
-    the 35% cash reserve.
-  - No stops, no exits: hold to settlement (the Under pays 1 or 0).
-  - A POST whose outcome is unknown is never re-posted.
+  Max 2 concurrent positions, one per game.
+  Stake = 4% of equity, floored at the exchange 5-share minimum, capped by
+  a 35% cash reserve.  No stop: hold to settlement.
+  A POST whose outcome is unknown is never re-sent.
 """
 import argparse
+import bisect
 import json
 import os
 import queue
 import sys
 import threading
 import time
-from collections import deque
 from datetime import datetime, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nba_data as nd
-import live_runner as L          # the canonical client / book / order helpers
+import live_runner as L          # canonical client / book / order helpers
 
 
 def _envf(name, default):
@@ -50,20 +56,21 @@ def _envf(name, default):
         return float(default)
 
 
-STAKE_FRAC = _envf("TOTALS_STAKE_FRAC", 0.03)
-MAX_CONCURRENT = int(_envf("TOTALS_MAX_CONCURRENT", 3))
+STAKE_FRAC = _envf("TOTALS_STAKE_FRAC", 0.04)
+MAX_CONCURRENT = int(_envf("TOTALS_MAX_CONCURRENT", 2))
 CASH_RESERVE = _envf("TOTALS_CASH_RESERVE", 0.35)
 MIN_SHARES = _envf("TOTALS_MIN_SHARES", 5)
-RISE_WINDOW = _envf("TOTALS_RISE_WINDOW", 300)
-RISE_CENTS = _envf("TOTALS_RISE_CENTS", 0.15)
-PRICE_LO = _envf("TOTALS_PRICE_LO", 0.20)
-PRICE_HI = _envf("TOTALS_PRICE_HI", 0.60)
-EL_MIN = _envf("TOTALS_EL_MIN", 1200)
-LINES_PER_GAME = int(_envf("TOTALS_LINES", 2))
-POLL = _envf("TOTALS_POLL", 10)
-MAIN_POLL = _envf("TOTALS_MAIN_POLL", 15)
-HEARTBEAT = _envf("TOTALS_HEARTBEAT", 60)
+P_MAX = _envf("TOTALS_P_MAX", 0.10)
+GAP = _envf("TOTALS_GAP", 0.03)
+EL_LO = _envf("TOTALS_EL_LO", 2040)
+EL_HI = _envf("TOTALS_EL_HI", 2280)
+UNDER_MAX = _envf("TOTALS_UNDER_MAX", 0.92)
+TOP_CANDIDATES = int(_envf("TOTALS_TOP_CANDIDATES", 8))
 BUY_SLIP = _envf("TOTALS_BUY_SLIP", 0.02)
+MAIN_POLL = _envf("TOTALS_MAIN_POLL", 12)
+HEARTBEAT = _envf("TOTALS_HEARTBEAT", 60)
+MODEL_PATH = os.environ.get("TOTALS_MODEL",
+                            os.path.join(ROOT, "data", "totals_model.json"))
 
 LOCK = threading.Lock()
 ALL_POSITIONS = []
@@ -71,6 +78,7 @@ RESERVED = 0
 CLIENT = None
 OUTDIR = None
 DATE = None
+MODEL = None
 LOG_LOCK = threading.Lock()
 _tried = {}
 
@@ -93,9 +101,27 @@ def log(rec):
         print(line, flush=True)
 
 
+# ------------------------------------------------------------------ model
+def load_model():
+    with open(MODEL_PATH) as f:
+        m = json.load(f)
+    return {"bin": m["bin"], "cells": m["cells"],
+            "cuts": {int(k): v for k, v in m["cuts"].items()}}
+
+
+def pmodel(el, S, needed):
+    """P(Q4 remaining > needed) from the 1555-game empirical table."""
+    bi = min(23, max(0, int(el // MODEL["bin"])))
+    lo, hi = MODEL["cuts"][bi]
+    k = 0 if S < lo else (1 if S < hi else 2)
+    v = MODEL["cells"].get(f"{bi},{k}")
+    if not v:
+        return None
+    return 1.0 - bisect.bisect_right(v, needed) / len(v)
+
+
 # ------------------------------------------------------------------ discovery
 def scoreboard(date=None):
-    """ESPN scoreboard; `date` is YYYYMMDD (US date).  None = ESPN's today."""
     url = ("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/"
            "scoreboard")
     if date:
@@ -122,8 +148,6 @@ def scoreboard(date=None):
 
 
 def _slug_dates(start):
-    """The US game date, plus the day before (a UTC midnight game is the
-    previous US date; trying both avoids an off-by-one)."""
     from datetime import timedelta
     try:
         dt = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
@@ -135,7 +159,7 @@ def _slug_dates(start):
 
 
 def resolve_totals(g):
-    """Find the full-game O/U ladder for this ESPN game."""
+    """Every full-game O/U line, with both token ids."""
     a = nd.pm_abbr(g["away"])
     h = nd.pm_abbr(g["home"])
     for d in _slug_dates(g.get("start")):
@@ -148,7 +172,7 @@ def resolve_totals(g):
             if not ev:
                 continue
             ev = ev[0]
-            lines = []
+            byl = {}
             for m in ev.get("markets") or []:
                 q = m.get("question") or ""
                 if ": O/U " not in q:
@@ -173,16 +197,15 @@ def resolve_totals(g):
                     price = float(json.loads(m.get("outcomePrices") or "[]")[0])
                 except Exception:
                     price = 0.5
-                lines.append({"line": line, "over": toks[0], "under": toks[1],
-                              "vol": float(m.get("volume") or 0),
-                              "price": price})
-            if not lines:
+                vol = float(m.get("volume") or 0)
+                cur = byl.get(line)
+                if cur is None or vol > cur["vol"]:
+                    byl[line] = {"line": line, "over": toks[0],
+                                 "under": toks[1], "vol": vol, "price": price}
+            if not byl:
                 continue
-            # the liquid core: top volume, then the lines closest to 50/50.
-            # Those are the ones that will matter once the game is running.
-            top = sorted(lines, key=lambda x: -x["vol"])[:8]
-            top = sorted(top, key=lambda x: abs(x["price"] - 0.5))[:LINES_PER_GAME]
-            return {"slug": slug, "title": ev.get("title"), "lines": top}
+            return {"slug": slug, "title": ev.get("title"),
+                    "lines": sorted(byl.values(), key=lambda x: x["line"])}
     return None
 
 
@@ -195,10 +218,8 @@ class TotalsTrader(threading.Thread):
         self.live = live
         self.client = L.make_client()
         self.q = queue.Queue(maxsize=4)
-        self.lines = {}
-        for x in res["lines"]:
-            self.lines[x["line"]] = dict(x, hist=deque(), done=False,
-                                         pending=False, pos=None)
+        self.lines = {x["line"]: dict(x) for x in res["lines"]}
+        self.break_done = False
         self.positions = []
         self.finished = False
         self._stop = False
@@ -232,47 +253,57 @@ class TotalsTrader(threading.Thread):
             self.settle(total)
             self.finished = True
             return
-        if el is None or el < EL_MIN:
+        if self.break_done:
             return
-        now = time.time()
+        if el is None or el < EL_LO or el > EL_HI:
+            return
+        # One shot per game, at the Q3 break.
+        self.break_done = True
+        cands = []
         for line, x in self.lines.items():
-            if x["done"] or x["pending"]:
+            pm = pmodel(el, total, line - total)
+            if pm is None or pm > P_MAX:
                 continue
+            cands.append((pm, x))
+        if not cands:
+            log({"ev": "break_no_candidate", "gid": self.game["gid"],
+                 "el": el, "total": total, "lines": len(self.lines)})
+            return
+        cands.sort(key=lambda t: t[0])
+        log({"ev": "break_scan", "gid": self.game["gid"], "el": el,
+             "total": total, "candidates": [(round(p, 4), x["line"])
+                                            for p, x in cands[:TOP_CANDIDATES]]})
+        for pm, x in cands[:TOP_CANDIDATES]:
             oa, ob, _ = L.book(self.client, x["over"])
             ua, ub, _ = L.book(self.client, x["under"])
             if oa is None or ob is None or not (0 < oa < 1 and 0 < ob < 1):
                 continue
             mid = (oa + ob) / 2
-            x["hist"].append((now, mid))
-            while x["hist"] and now - x["hist"][0][0] > RISE_WINDOW + 120:
-                x["hist"].popleft()
-            old = None
-            for t, m in reversed(x["hist"]):
-                if t <= now - RISE_WINDOW:
-                    old = m
-                    break
-            if old is None:
+            if mid < pm + GAP:
+                log({"ev": "skip_gap", "gid": self.game["gid"],
+                     "line": x["line"], "pm": round(pm, 4),
+                     "over_mid": round(mid, 4)})
                 continue
-            if not (PRICE_LO <= mid <= PRICE_HI):
+            if ua is None or ua > UNDER_MAX:
+                log({"ev": "skip_under_price", "gid": self.game["gid"],
+                     "line": x["line"], "under_ask": ua})
                 continue
-            if mid - old < RISE_CENTS:
+            depth = L.book_depth(self.client, x["under"]) or {}
+            asks = depth.get("asks") or []
+            avail = sum(s for _p, s in asks[:3])
+            if avail < MIN_SHARES:
+                log({"ev": "skip_depth", "gid": self.game["gid"],
+                     "line": x["line"], "avail": avail})
                 continue
-            if ua is None:
-                log({"ev": "signal_skip_no_ask", "gid": self.game["gid"],
-                     "line": line, "over_mid": round(mid, 4)})
-                continue
-            self.enter(x, mid, old, ua, el, total, g,
-                       over_bid=ob, over_ask=oa)
+            self.enter(x, pm, mid, oa, ob, ua, el, total, depth)
+            return
 
     # ---- entry ----
-    def enter(self, x, mid, old, under_ask, el, total, g,
-              over_bid=None, over_ask=None):
+    def enter(self, x, pm, mid, oa, ob, under_ask, el, total, depth):
         global RESERVED
-        # Reserve a concurrency slot WITHOUT holding the lock across the
-        # order round-trip: one slow POST must not freeze another game.
         with LOCK:
             if len(ALL_POSITIONS) + RESERVED >= MAX_CONCURRENT:
-                log({"ev": "signal_skip_cap", "gid": self.game["gid"],
+                log({"ev": "skip_cap", "gid": self.game["gid"],
                      "line": x["line"],
                      "open": len(ALL_POSITIONS) + RESERVED})
                 return
@@ -288,30 +319,28 @@ class TotalsTrader(threading.Thread):
                                for p in ALL_POSITIONS)
             equity = bal + deployed
             usd = min(equity * STAKE_FRAC, bal * (1 - CASH_RESERVE))
-            usd = max(usd, MIN_SHARES * under_ask)      # exchange 5-share floor
+            usd = max(usd, MIN_SHARES * under_ask)
             if usd < 1 or usd > bal * (1 - CASH_RESERVE):
-                log({"ev": "signal_skip_cash", "gid": self.game["gid"],
+                log({"ev": "skip_cash", "gid": self.game["gid"],
                      "line": x["line"], "usd": round(usd, 2),
                      "bal": round(bal, 2)})
                 return
             x["pending"] = True
-            depth = L.book_depth(self.client, x["under"]) or {}
             log({"ev": "signal", "gid": self.game["gid"],
                  "slug": self.res.get("slug"), "line": x["line"],
-                 "over_mid": round(mid, 4), "over_5m_ago": round(old, 4),
-                 "rise": round(mid - old, 4),
-                 "over_bid": over_bid, "over_ask": over_ask,
+                 "pm_over": round(pm, 4), "gap": round(mid - pm, 4),
+                 "over_bid": ob, "over_ask": oa, "over_mid": round(mid, 4),
                  "under_ask": under_ask, "usd": round(usd, 2),
                  "shares_min": round(usd / under_ask, 2) if under_ask else None,
-                 "el": el, "total": total, "period": g.get("period"),
+                 "el": el, "total": total, "period": self.game.get("period"),
+                 "under_asks": depth.get("asks"),
                  "under_ask_notional": depth.get("ask_notional"),
-                 "under_asks": depth.get("asks"), "live": self.live})
+                 "live": self.live})
             if not self.live:
                 pos = self._pos(x, under_ask,
                                 usd / under_ask if under_ask else 0,
                                 under_ask)
                 paper = True
-                x["done"] = True
                 return
             base = L.token_balance(self.client, x["under"])
             t0 = int(time.time())
@@ -327,7 +356,7 @@ class TotalsTrader(threading.Thread):
                      "usd": round(usd, 2), "order_id": oid or signed,
                      "limit": round(min(under_ask + BUY_SLIP, 0.99), 3)})
             except Exception as e:
-                # A POST whose outcome is unknown must never be re-sent.
+                # An unknown POST is never re-sent.
                 log({"ev": "buy_error", "gid": self.game["gid"],
                      "line": x["line"], "err": repr(e)[:200]})
             shares = price = None
@@ -345,7 +374,6 @@ class TotalsTrader(threading.Thread):
                     price = under_ask
                     break
                 time.sleep(2)
-            x["done"] = True
             if not shares:
                 log({"ev": "buy_gave_up", "gid": self.game["gid"],
                      "line": x["line"], "order_id": oid})
@@ -415,24 +443,18 @@ class TotalsTrader(threading.Thread):
 
 
 # ------------------------------------------------------------------ main
-def _prune_tried():
-    now = time.time()
-    for k in [k for k, v in _tried.items() if now - v > 3600]:
-        _tried.pop(k, None)
-
-
 def run(live):
-    global CLIENT, OUTDIR
+    global CLIENT, OUTDIR, MODEL
     OUTDIR = today_dir()
     os.makedirs(OUTDIR, exist_ok=True)
+    MODEL = load_model()
     CLIENT = L.make_client()
     bal = L.balance(CLIENT)
     log({"ev": "start", "live": live, "balance": bal,
-         "stake_frac": STAKE_FRAC, "max_open": MAX_CONCURRENT,
-         "cash_reserve": CASH_RESERVE, "rise_window": RISE_WINDOW,
-         "rise_cents": RISE_CENTS, "price": [PRICE_LO, PRICE_HI],
-         "el_min": EL_MIN, "lines_per_game": LINES_PER_GAME,
-         "outdir": OUTDIR})
+         "strategy": "q3_break_under", "p_max": P_MAX, "gap": GAP,
+         "el": [EL_LO, EL_HI], "stake_frac": STAKE_FRAC,
+         "max_open": MAX_CONCURRENT, "under_max": UNDER_MAX,
+         "model": MODEL_PATH, "outdir": OUTDIR})
     traders = {}
     last_hb = 0.0
     while True:
@@ -462,8 +484,7 @@ def run(live):
             traders[gid] = tr
             tr.start()
             log({"ev": "trader_start", "gid": gid, "slug": res.get("slug"),
-                 "title": res.get("title"),
-                 "lines": [x["line"] for x in res["lines"]]})
+                 "title": res.get("title"), "lines": len(res["lines"])})
         for gid, tr in list(traders.items()):
             if tr.finished and not tr.positions:
                 tr.stop()
@@ -490,7 +511,6 @@ def run(live):
 
 
 def selftest():
-    """Discovery + book smoke test, no orders, no trader loop."""
     client = L.make_client()
     games = scoreboard(DATE)
     print("games", len(games), "balance", L.balance(client))
@@ -499,15 +519,14 @@ def selftest():
             continue
         res = resolve_totals(g)
         print(g["gid"], g.get("away"), "@", g.get("home"), g.get("state"),
-              "->", res and res.get("slug"))
+              "->", res and res.get("slug"), "lines", res and len(res["lines"]))
         if not res:
             continue
-        for x in res["lines"]:
+        for x in res["lines"][:4]:
             oa, ob, tick = L.book(client, x["over"])
             ua, ub, _ = L.book(client, x["under"])
-            print(f"  line {x['line']:6.1f} over bid/ask {ob}/{oa} "
-                  f"under bid/ask {ub}/{ua} tick {tick}")
-            print("   under depth", L.book_depth(client, x["under"]))
+            print(f"  line {x['line']:6.1f} over {ob}/{oa} under {ub}/{ua}")
+        print("  depth sample", L.book_depth(client, res["lines"][0]["under"]))
         return
     print("no pre/in game with a totals market")
 
@@ -517,7 +536,7 @@ def main():
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--selftest", action="store_true")
-    ap.add_argument("--date", default=None, help="ESPN date YYYYMMDD (default: today)")
+    ap.add_argument("--date", default=None, help="ESPN date YYYYMMDD")
     ap.add_argument("--duration", type=float, default=0,
                     help="stop after N seconds (smoke test)")
     a = ap.parse_args()
@@ -528,7 +547,6 @@ def main():
         return
     if a.duration:
         threading.Timer(a.duration, lambda: os._exit(0)).start()
-    # live only when explicitly asked; dry-run is the safe default
     run(live=bool(a.live and not a.dry_run))
 
 

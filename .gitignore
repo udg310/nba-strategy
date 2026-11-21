@@ -15,3 +15,6 @@ data/live_trade/
 
 # totals fade runner logs (server-local)
 data/totals_live/
+
+# totals research raw data
+data/totals_research/

@@ -66,6 +66,9 @@ EL_LO = _envf("TOTALS_EL_LO", 2040)
 EL_HI = _envf("TOTALS_EL_HI", 2280)
 UNDER_MAX = _envf("TOTALS_UNDER_MAX", 0.92)
 TOP_CANDIDATES = int(_envf("TOTALS_TOP_CANDIDATES", 8))
+# Lines taken per game.  Adjacent lines are nearly the same bet, so
+# this is a *concentration* switch, not a diversification one.
+LINES_PER_GAME = int(_envf("TOTALS_LINES_PER_GAME", 1))
 BUY_SLIP = _envf("TOTALS_BUY_SLIP", 0.02)
 MAIN_POLL = _envf("TOTALS_MAIN_POLL", 12)
 HEARTBEAT = _envf("TOTALS_HEARTBEAT", 60)
@@ -278,7 +281,10 @@ class TotalsTrader(threading.Thread):
         log({"ev": "break_scan", "gid": self.game["gid"], "el": el,
              "total": total, "candidates": [(round(p, 4), x["line"])
                                             for p, x in cands[:TOP_CANDIDATES]]})
+        taken = 0
         for pm, x in cands[:TOP_CANDIDATES]:
+            if taken >= LINES_PER_GAME:
+                break
             oa, ob, _ = L.book(self.client, x["over"])
             ua, ub, _ = L.book(self.client, x["under"])
             if oa is None or ob is None or not (0 < oa < 1 and 0 < ob < 1):
@@ -300,8 +306,8 @@ class TotalsTrader(threading.Thread):
                 log({"ev": "skip_depth", "gid": self.game["gid"],
                      "line": x["line"], "avail": avail})
                 continue
-            self.enter(x, pm, mid, oa, ob, ua, el, total, depth)
-            return
+            if self.enter(x, pm, mid, oa, ob, ua, el, total, depth):
+                taken += 1
 
     # ---- entry ----
     def enter(self, x, pm, mid, oa, ob, under_ask, el, total, depth):
@@ -311,14 +317,14 @@ class TotalsTrader(threading.Thread):
                 log({"ev": "skip_cap", "gid": self.game["gid"],
                      "line": x["line"],
                      "open": len(ALL_POSITIONS) + RESERVED})
-                return
+                return False
             RESERVED += 1
         pos = None
         paper = False
         try:
             bal = L.balance(self.client)
             if bal is None:
-                return
+                return False
             with LOCK:
                 deployed = sum(p["shares"] * p["entry"]
                                for p in ALL_POSITIONS)
@@ -329,7 +335,7 @@ class TotalsTrader(threading.Thread):
                 log({"ev": "skip_cash", "gid": self.game["gid"],
                      "line": x["line"], "usd": round(usd, 2),
                      "bal": round(bal, 2)})
-                return
+                return False
             x["pending"] = True
             log({"ev": "signal", "gid": self.game["gid"],
                  "slug": self.res.get("slug"), "line": x["line"],
@@ -346,7 +352,7 @@ class TotalsTrader(threading.Thread):
                                 usd / under_ask if under_ask else 0,
                                 under_ask)
                 paper = True
-                return
+                return True
             base = L.token_balance(self.client, x["under"])
             t0 = int(time.time())
             oid = None
@@ -382,7 +388,7 @@ class TotalsTrader(threading.Thread):
             if not shares:
                 log({"ev": "buy_gave_up", "gid": self.game["gid"],
                      "line": x["line"], "order_id": oid})
-                return
+                return False
             pos = self._pos(x, price, shares, under_ask)
         finally:
             x["pending"] = False
@@ -394,6 +400,9 @@ class TotalsTrader(threading.Thread):
                 self.positions.append(pos)
                 log({"ev": "paper_buy" if paper else "buy", **pos,
                      "usdc": round(pos["shares"] * pos["entry"], 2)})
+        # Never `return` from inside `finally`: it swallows a real exception
+        # and would report a failed entry as a success.
+        return pos is not None
 
     def _fills(self, token, oid, t0):
         try:
@@ -459,6 +468,7 @@ def run(live):
          "strategy": "q3_break_under", "p_max": P_MAX, "gap": GAP,
          "el": [EL_LO, EL_HI], "stake_frac": STAKE_FRAC,
          "max_open": MAX_CONCURRENT, "under_max": UNDER_MAX,
+         "lines_per_game": LINES_PER_GAME,
          "model": MODEL_PATH, "outdir": OUTDIR})
     traders = {}
     last_hb = 0.0

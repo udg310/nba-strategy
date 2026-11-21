@@ -41,7 +41,7 @@ import queue
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -81,6 +81,11 @@ DATE = None
 MODEL = None
 LOG_LOCK = threading.Lock()
 _tried = {}
+
+
+def us_date():
+    """The US game date (ET), which is what the ESPN ?dates= query wants."""
+    return (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y%m%d")
 
 
 def today_dir():
@@ -545,7 +550,7 @@ def main():
                     help="stop after N seconds (smoke test)")
     a = ap.parse_args()
     global DATE
-    DATE = a.date
+    DATE = a.date or us_date()
     if a.selftest:
         selftest()
         return

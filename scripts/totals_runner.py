@@ -511,8 +511,12 @@ def run(live):
 
 
 def selftest():
+    global MODEL
+    MODEL = load_model()
     client = L.make_client()
     games = scoreboard(DATE)
+    print("model", MODEL_PATH, "cells", len(MODEL["cells"]))
+    print("sample P(2160, S=160, line=235) =", round(pmodel(2160, 160, 75), 4))
     print("games", len(games), "balance", L.balance(client))
     for g in games:
         if g.get("state") not in ("pre", "in"):

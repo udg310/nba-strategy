@@ -1,0 +1,101 @@
+{
+  "version": "2026-11-22",
+  "note": "Q4 totals strategy. Params frozen from the 240-game live replay.",
+  "model": {
+    "features": [
+      "1",
+      "tot",
+      "rt",
+      "tot*rt/2880",
+      "pace",
+      "pace*rt/60",
+      "m",
+      "m*rt/2880",
+      "abs(m)",
+      "abs(m)*rt/2880",
+      "recent",
+      "recent*rt/300",
+      "big21",
+      "big21*rt/2880"
+    ],
+    "coef": [
+      1.6034455384901538,
+      0.007730754476056598,
+      0.06943003605131902,
+      -0.11785155543177395,
+      0.24882265884951446,
+      0.1336174989002103,
+      -0.14379406037041478,
+      0.3489537920363162,
+      -0.14379406037041487,
+      0.34899978959754413,
+      0.05846474454729037,
+      0.008167167633066253,
+      2.1425447821916324,
+      -5.337510860058666
+    ],
+    "note": "fitted on 2025 season, validated on 2026. recent=points in last 5 game-minutes, big21=margin>=21"
+  },
+  "overtime": {
+    "enabled": true,
+    "window_el": 2400,
+    "p_by_margin": {
+      "0": 0.134,
+      "3": 0.134,
+      "4": 0.085,
+      "6": 0.085,
+      "7": 0.041,
+      "10": 0.041,
+      "11": 0.03,
+      "15": 0.03
+    },
+    "default_p": 0.004,
+    "ot_points": 52.4,
+    "nonot_points": 29.0
+  },
+  "sigma": {
+    "2520|close": 10.65,
+    "2520|mid": 8.04,
+    "2520|big": 6.33,
+    "2580|close": 10.4,
+    "2580|mid": 7.6,
+    "2580|big": 5.8,
+    "2640|close": 10.02,
+    "2640|mid": 7.09,
+    "2640|big": 5.19,
+    "2700|close": 10.0,
+    "2700|mid": 6.2,
+    "2700|big": 4.5,
+    "2760|close": 10.02,
+    "2760|mid": 5.36,
+    "2760|big": 3.75
+  },
+  "sigma_fallback": 9.0,
+  "entry": {
+    "checkpoints_el": [
+      2520,
+      2580,
+      2640,
+      2700,
+      2760
+    ],
+    "z_min": 0.4,
+    "max_bets_per_game": 1,
+    "stake_mode": "session",
+    "stake_frac": 0.03,
+    "under_price_max": 0.9,
+    "over_need_max": 20.0,
+    "price_min": 0.1,
+    "price_max": 0.9,
+    "max_positions": 0
+  },
+  "sequence": {
+    "continue_only_if_previous_won": false,
+    "stake_multiplier": 1.0,
+    "note": "one bet per game; the sequential rule is unimplementable because bet 1 settles only at the final whistle"
+  },
+  "session": {
+    "daily_loss_limit": 0.0,
+    "settle_after_game": true
+  }
+}
